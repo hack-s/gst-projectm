@@ -225,18 +225,6 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav)
   }
 #endif
 
-  // Check if ProjectM instance exists, and create if not
-  if (!plugin->priv->handle)
-  {
-    // Create ProjectM instance
-    plugin->priv->handle = projectm_init(plugin);
-    if (!plugin->priv->handle) {
-      GST_ERROR_OBJECT(plugin, "ProjectM could not be initialized");
-      return FALSE;
-    }
-    gl_error_handler(glav->context, plugin);
-  }
-
   return TRUE;
 }
 
@@ -291,6 +279,18 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
 static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav, GstBuffer *audio, GstVideoFrame *video)
 {
   GstProjectM *plugin = GST_PROJECTM(glav);
+
+  // Check if ProjectM instance exists, and create if not
+  if (!plugin->priv->handle)
+  {
+    // Create ProjectM instance
+    plugin->priv->handle = projectm_init(plugin);
+    if (!plugin->priv->handle) {
+      GST_ERROR_OBJECT(plugin, "ProjectM could not be initialized");
+      return FALSE;
+    }
+    gl_error_handler(glav->context, plugin);
+  }
 
   GstMapInfo audioMap;
   gboolean result = TRUE;
