@@ -32,8 +32,8 @@
 #ifndef __GST_GL_BASE_AUDIO_VISUALIZER_H__
 #define __GST_GL_BASE_AUDIO_VISUALIZER_H__
 
+#include "gstpmaudiovisualizer.h"
 #include <gst/gl/gstgl_fwd.h>
-#include <gst/pbutils/gstaudiovisualizer.h>
 #include <gst/video/video-info.h>
 #include <stdint.h>
 
@@ -72,11 +72,14 @@ GType gst_gl_base_audio_visualizer_get_type(void);
  * The parent instance type of a base GL Audio Visualizer.
  */
 struct _GstGLBaseAudioVisualizer {
-  GstAudioVisualizer parent;
+  GstPMAudioVisualizer parent;
 
   /*< public >*/
   GstGLDisplay *display;
   GstGLContext *context;
+
+  /* total running time */
+  GstClockTime running_time;
 
   /*< private >*/
   gpointer _padding[GST_PADDING];
@@ -91,21 +94,24 @@ struct _GstGLBaseAudioVisualizer {
  * @gl_stop: called in the GL thread to clean up the element GL state.
  * @gl_render: called in the GL thread to fill the current video texture.
  * @setup: called when the format changes (delegate from
- * GstAudioVisualizer.setup)
+ * GstPMAudioVisualizer.setup)
  *
  * The base class for OpenGL based audio visualizers.
  *
  */
 struct _GstGLBaseAudioVisualizerClass {
-  GstAudioVisualizerClass parent_class;
+  GstPMAudioVisualizerClass parent_class;
 
   /*< public >*/
   GstGLAPI supported_gl_api;
   gboolean (*gl_start)(GstGLBaseAudioVisualizer *glav);
   void (*gl_stop)(GstGLBaseAudioVisualizer *glav);
-  gboolean (*gl_render)(GstGLBaseAudioVisualizer *glav, GstBuffer *audio,
-                        GstVideoFrame *video);
   gboolean (*setup)(GstGLBaseAudioVisualizer *glav);
+  gboolean (*fill_gl_memory)(GstGLBaseAudioVisualizer *glav,
+                             GstBuffer *in_audio, GstGLMemory *mem);
+  GstFlowReturn (*prepare_output_buffer)(GstGLBaseAudioVisualizer *glav,
+                                         GstBuffer **outbuf);
+
   /*< private >*/
   gpointer _padding[GST_PADDING];
 };

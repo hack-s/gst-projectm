@@ -36,7 +36,7 @@ struct _GstProjectM {
 };
 
 struct _GstProjectMClass {
-  GstAudioVisualizerClass parent_class;
+  GstPMAudioVisualizerClass parent_class;
 };
 
 static void gst_projectm_set_property(GObject *object, guint prop_id,
@@ -53,8 +53,9 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav);
 
 static void gst_projectm_gl_stop(GstGLBaseAudioVisualizer *glav);
 
-static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav,
-                                    GstBuffer *audio, GstVideoFrame *video);
+static gboolean gst_projectm_fill_gl_memory(GstGLBaseAudioVisualizer *glav,
+                                            GstBuffer *in_audio,
+                                            GstGLMemory *mem);
 
 static void gst_projectm_class_init(GstProjectMClass *klass);
 

@@ -1,0 +1,97 @@
+/* GStreamer
+ * Copyright (C) <2011> Stefan Kost <ensonic@users.sf.net>
+ * Copyright (C) <2015> Luis de Bethencourt <luis@debethencourt.com>
+ *
+ * gstaudiovisualizer.c: base class for audio visualisation elements
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
+ * Boston, MA 02110-1301, USA.
+ */
+
+#ifndef __GST_PM_AUDIO_VISUALIZER_H__
+#define __GST_PM_AUDIO_VISUALIZER_H__
+
+#include <gst/base/gstbasetransform.h>
+#include <gst/gst.h>
+
+#include <gst/audio/audio.h>
+#include <gst/base/gstadapter.h>
+#include <gst/pbutils/pbutils-prelude.h>
+#include <gst/video/video.h>
+
+G_BEGIN_DECLS
+#define GST_TYPE_PM_AUDIO_VISUALIZER (gst_pm_audio_visualizer_get_type())
+#define GST_PM_AUDIO_VISUALIZER(obj)                                           \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_PM_AUDIO_VISUALIZER,             \
+                              GstPMAudioVisualizer))
+#define GST_PM_AUDIO_VISUALIZER_CLASS(klass)                                   \
+  (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_PM_AUDIO_VISUALIZER,              \
+                           GstPMAudioVisualizerClass))
+#define GST_PM_AUDIO_VISUALIZER_GET_CLASS(obj)                                 \
+  (G_TYPE_INSTANCE_GET_CLASS((obj), GST_TYPE_PM_AUDIO_VISUALIZER,              \
+                             GstPMAudioVisualizerClass))
+#define GST_IS_SYNAESTHESIA(obj)                                               \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_PM_AUDIO_VISUALIZER))
+#define GST_IS_SYNAESTHESIA_CLASS(klass)                                       \
+  (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_PM_AUDIO_VISUALIZER))
+typedef struct _GstPMAudioVisualizer GstPMAudioVisualizer;
+typedef struct _GstPMAudioVisualizerClass GstPMAudioVisualizerClass;
+typedef struct _GstPMAudioVisualizerPrivate GstPMAudioVisualizerPrivate;
+
+struct _GstPMAudioVisualizer {
+  GstElement parent;
+
+  guint req_spf; /* min samples per frame wanted by the subclass */
+
+  /* video state */
+  GstVideoInfo vinfo;
+
+  /* audio state */
+  GstAudioInfo ainfo;
+
+  /*< private >*/
+  GstPMAudioVisualizerPrivate *priv;
+};
+
+struct _GstPMAudioVisualizerClass {
+  /*< private >*/
+  GstElementClass parent_class;
+
+  /*< public >*/
+  /* virtual function, called whenever the format changes */
+  gboolean (*setup)(GstPMAudioVisualizer *scope);
+
+  /* virtual function for rendering a frame */
+  gboolean (*render)(GstPMAudioVisualizer *scope, GstBuffer *audio,
+                     GstVideoFrame *video);
+
+  gboolean (*decide_allocation)(GstPMAudioVisualizer *scope, GstQuery *query);
+
+  GstFlowReturn (*prepare_output_buffer)(GstPMAudioVisualizer *scope,
+                                         GstBuffer **outbuf);
+};
+
+GST_PBUTILS_API
+GType gst_pm_audio_visualizer_get_type(void);
+
+GST_GL_API
+GstFlowReturn
+gst_pm_audio_visualizer_prepare_output_buffer(GstPMAudioVisualizer *scope,
+                                              GstBuffer **outbuf);
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(GstPMAudioVisualizer, gst_object_unref)
+
+G_END_DECLS
+#endif /* __GST_PM_AUDIO_VISUALIZER_H__ */

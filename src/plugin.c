@@ -24,11 +24,16 @@ GST_DEBUG_CATEGORY_STATIC(gst_projectm_debug);
 #define GST_CAT_DEFAULT gst_projectm_debug
 
 struct _GstProjectMPrivate {
-  GLenum gl_format;
   projectm_handle handle;
 
   GstClockTime first_frame_time;
   gboolean first_frame_received;
+
+  GstGLFramebuffer *fbo;
+  GLuint textureID;
+  GstBuffer *in_audio;
+  GstGLMemory *mem;
+  GstGLVideoAllocationParams *allocation_params;
 };
 
 G_DEFINE_TYPE_WITH_CODE(GstProjectM, gst_projectm,
@@ -37,6 +42,48 @@ G_DEFINE_TYPE_WITH_CODE(GstProjectM, gst_projectm,
                             GST_DEBUG_CATEGORY_INIT(gst_projectm_debug,
                                                     "gstprojectm", 0,
                                                     "Plugin Root"));
+
+static GstBuffer *wrap_gl_texture(GstGLBaseAudioVisualizer *glav,
+                                  GstProjectM *plugin) {
+  GstGLMemoryAllocator *allocator;
+  gpointer wrapped[1];
+  GstGLFormat formats[1];
+  GstBuffer *buffer;
+  gboolean ret;
+
+  allocator = gst_gl_memory_allocator_get_default(glav->context);
+
+  buffer = gst_buffer_new();
+  if (!buffer) {
+    g_error("Failed to create new buffer\n");
+    return NULL;
+  }
+
+  wrapped[0] = (gpointer)plugin->priv->textureID;
+  formats[0] = GST_GL_RGBA8;
+
+  // * Wrap the texture into GLMemory. *
+  ret = gst_gl_memory_setup_buffer(
+      allocator, buffer, plugin->priv->allocation_params, formats, wrapped, 1);
+  if (!ret) {
+    g_error("Failed to setup gl memory\n");
+    return NULL;
+  }
+
+  gst_object_unref(allocator);
+
+  return buffer;
+}
+
+static GstFlowReturn
+gst_projectm_prepare_output_buffer(GstGLBaseAudioVisualizer *scope,
+                                   GstBuffer **outbuf) {
+  GstProjectM *plugin = GST_PROJECTM(scope);
+
+  *outbuf = wrap_gl_texture(scope, plugin);
+  GST_INFO_OBJECT(plugin, "Wrapped RT texture buffer");
+  return GST_FLOW_OK;
+}
 
 void gst_projectm_set_property(GObject *object, guint property_id,
                                const GValue *value, GParamSpec *pspec) {
@@ -201,6 +248,11 @@ static void gst_projectm_init(GstProjectM *plugin) {
   plugin->easter_egg = DEFAULT_EASTER_EGG;
   plugin->preset_locked = DEFAULT_PRESET_LOCKED;
   plugin->priv->handle = NULL;
+  plugin->priv->fbo = NULL;
+  plugin->priv->textureID = 0;
+  plugin->priv->in_audio = NULL;
+  plugin->priv->mem = NULL;
+  plugin->priv->allocation_params = NULL;
 }
 
 static void gst_projectm_finalize(GObject *object) {
@@ -217,11 +269,26 @@ static void gst_projectm_gl_stop(GstGLBaseAudioVisualizer *src) {
     projectm_destroy(plugin->priv->handle);
     plugin->priv->handle = NULL;
   }
+  if (plugin->priv->fbo) {
+    gst_object_unref(plugin->priv->fbo);
+    plugin->priv->fbo = NULL;
+  }
+
+  if (plugin->priv->textureID) {
+    glDeleteTextures(1, &plugin->priv->textureID);
+    plugin->priv->textureID = 0;
+  }
+
+  if (plugin->priv->allocation_params) {
+    gst_gl_allocation_params_free(plugin->priv->allocation_params);
+    plugin->priv->allocation_params = NULL;
+  }
 }
 
 static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
   // Cast the audio visualizer to the ProjectM plugin
   GstProjectM *plugin = GST_PROJECTM(glav);
+  GstPMAudioVisualizer *gstav = GST_PM_AUDIO_VISUALIZER(glav);
 
 #ifdef USE_GLEW
   GST_DEBUG_OBJECT(plugin, "Initializing GLEW");
@@ -231,6 +298,27 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
     return FALSE;
   }
 #endif
+
+  glGenTextures(1, &plugin->priv->textureID);
+  glBindTexture(GL_TEXTURE_2D, plugin->priv->textureID);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
+               GST_VIDEO_INFO_HEIGHT(&gstav->vinfo), 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, NULL);
+  // glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, GST_VIDEO_INFO_WIDTH
+  // (&gstav->vinfo), GST_VIDEO_INFO_HEIGHT (&gstav->vinfo)); glTexSubImage2D
+  // (GL_TEXTURE_2D, 0, 0, 0, GST_VIDEO_INFO_WIDTH (&gstav->vinfo),
+  // GST_VIDEO_INFO_HEIGHT (&gstav->vinfo), GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  // glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+  glBindTexture(GL_TEXTURE_2D, 0);
+
+  plugin->priv->allocation_params =
+      gst_gl_video_allocation_params_new_wrapped_texture(
+          glav->context, NULL, &gstav->vinfo, 0, NULL, GST_GL_TEXTURE_TARGET_2D,
+          GST_GL_RGBA, plugin->priv->textureID, NULL, 0);
 
   // Check if ProjectM instance exists, and create if not
   if (!plugin->priv->handle) {
@@ -243,11 +331,55 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
     gl_error_handler(glav->context, plugin);
   }
 
+  plugin->priv->fbo = gst_gl_framebuffer_new_with_default_depth(
+      glav->context, GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
+      GST_VIDEO_INFO_HEIGHT(&gstav->vinfo));
+
+  /*
+  glBindFramebuffer (GL_FRAMEBUFFER, plugin->priv->fbo->fbo_id);
+  glBindFramebuffer (GL_FRAMEBUFFER, 0);
+*/
+  /*
+   * Color Texture.
+   *
+   * IMPORTANT: create a *complete* texture with only one mipmap level.
+   */
+  // glGenTextures (1, &plugin->priv->textureID);
+  // glBindTexture (GL_TEXTURE_2D, plugin->priv->textureID);
+  // glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGB8, GST_VIDEO_INFO_WIDTH
+  // (&gstav->vinfo), GST_VIDEO_INFO_HEIGHT (&gstav->vinfo)); glTexSubImage2D
+  // (GL_TEXTURE_2D, 0, 0, 0, GST_VIDEO_INFO_WIDTH (&gstav->vinfo),
+  // GST_VIDEO_INFO_HEIGHT (&gstav->vinfo), GL_RGB,
+  //                  GL_UNSIGNED_BYTE, NULL);
+  // glBindTexture (GL_TEXTURE_2D, 0);
+
+  /*
+   * Attach empty texture to framebuffer object: drawing to scene_fbo will use
+   * scene_texture as the backing storage.
+   */
+  // glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+  // GL_TEXTURE_2D,
+  //                          plugin->priv->textureID, 0);
+  //
+  //  glReadBuffer (GL_COLOR_ATTACHMENT0);
+
+  //  GLenum DrawBuffers[1] = { GL_COLOR_ATTACHMENT0 };
+  //  glDrawBuffers (1, DrawBuffers);
+
+  /* Sanity check. */
+  //  if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+  //  {
+  //    g_error("glCheckFramebufferStatus() failed.\n");
+  //  }
+
+  //  glBindFramebuffer (GL_FRAMEBUFFER, 0);
+
+  GST_INFO_OBJECT(plugin, "GL start complete");
   return TRUE;
 }
 
 static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
-  GstAudioVisualizer *bscope = GST_AUDIO_VISUALIZER(glav);
+  GstPMAudioVisualizer *bscope = GST_PM_AUDIO_VISUALIZER(glav);
   GstProjectM *plugin = GST_PROJECTM(glav);
 
   // Calculate depth based on pixel stride and bits
@@ -261,23 +393,6 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
   // get GStreamer video format and map it to the corresponding OpenGL pixel
   // format
   const GstVideoFormat video_format = GST_VIDEO_INFO_FORMAT(&bscope->vinfo);
-
-  // TODO: why is the reversed byte order needed when copying pixel data from
-  // OpenGL ?
-  switch (video_format) {
-  case GST_VIDEO_FORMAT_ABGR:
-    plugin->priv->gl_format = GL_RGBA;
-    break;
-
-  case GST_VIDEO_FORMAT_RGBA:
-    // GL_ABGR_EXT does not seem to be well-supported, does not work on Windows
-    plugin->priv->gl_format = GL_ABGR_EXT;
-    break;
-
-  default:
-    GST_ERROR_OBJECT(plugin, "Unsupported video format: %d", video_format);
-    return FALSE;
-  }
 
   // Log audio info
   GST_DEBUG_OBJECT(
@@ -316,9 +431,9 @@ static double get_seconds_since_first_frame(GstProjectM *plugin,
 }
 
 // TODO: CLEANUP & ADD DEBUGGING
-static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav,
-                                    GstBuffer *audio, GstVideoFrame *video) {
-  GstProjectM *plugin = GST_PROJECTM(glav);
+static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
+  GstProjectM *plugin = GST_PROJECTM(stuff);
+  GstGLBaseAudioVisualizer *gstav = GST_GL_BASE_AUDIO_VISUALIZER(stuff);
 
   GstMapInfo audioMap;
   gboolean result = TRUE;
@@ -329,7 +444,7 @@ static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav,
   projectm_set_frame_time(plugin->priv->handle, seconds_since_first_frame);
 
   // AUDIO
-  gst_buffer_map(audio, &audioMap, GST_MAP_READ);
+  gst_buffer_map(plugin->priv->in_audio, &audioMap, GST_MAP_READ);
 
   // GST_DEBUG_OBJECT(plugin, "Audio Samples: %u, Offset: %lu, Offset End: %lu,
   // Sample Rate: %d, FPS: %d, Required Samples Per Frame: %d",
@@ -344,26 +459,38 @@ static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav,
   // *)audioMap.data)[102], ((gint16 *)audioMap.data)[103]);
 
   // VIDEO
-  const GstGLFuncs *glFunctions = glav->context->gl_vtable;
+  GST_TRACE_OBJECT(plugin, "rendering projectM to fbo %d",
+                   plugin->priv->fbo->fbo_id);
+  projectm_opengl_render_frame_fbo(plugin->priv->handle,
+                                   plugin->priv->fbo->fbo_id);
 
-  size_t windowWidth, windowHeight;
+  gl_error_handler(gstav->context, plugin);
 
-  projectm_get_window_size(plugin->priv->handle, &windowWidth, &windowHeight);
-
-  projectm_opengl_render_frame(plugin->priv->handle);
-  gl_error_handler(glav->context, plugin);
-
-  glFunctions->ReadPixels(0, 0, windowWidth, windowHeight,
-                          plugin->priv->gl_format, GL_UNSIGNED_INT_8_8_8_8,
-                          (guint8 *)GST_VIDEO_FRAME_PLANE_DATA(video, 0));
-
-  gst_buffer_unmap(audio, &audioMap);
+  gst_buffer_unmap(plugin->priv->in_audio, &audioMap);
 
   // GST_DEBUG_OBJECT(plugin, "Video Data: %d %d\n",
   // GST_VIDEO_FRAME_N_PLANES(video), ((uint8_t
   // *)(GST_VIDEO_FRAME_PLANE_DATA(video, 0)))[0]);
 
   // GST_DEBUG_OBJECT(plugin, "Rendered one frame");
+
+  return result;
+}
+
+static gboolean gst_projectm_fill_gl_memory(GstGLBaseAudioVisualizer *glav,
+                                            GstBuffer *in_audio,
+                                            GstGLMemory *mem) {
+
+  GstProjectM *plugin = GST_PROJECTM(glav);
+
+  plugin->priv->in_audio = in_audio;
+  plugin->priv->mem = mem;
+
+  gboolean result = gst_gl_framebuffer_draw_to_texture(
+      plugin->priv->fbo, mem, gst_projectm_fill_gl_memory_callback, plugin);
+
+  plugin->priv->in_audio = NULL;
+  plugin->priv->mem = NULL;
 
   return result;
 }
@@ -497,7 +624,7 @@ static void gst_projectm_class_init(GstProjectMClass *klass) {
           "preset-locked", "Preset Locked",
           "Locks or unlocks the current preset. When locked, the visualizer "
           "remains on the current preset without automatic changes.",
-          DEFAULT_PRESET_LOCKED, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+          DEFAULT_PRESET_LOCKED,G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property(
       gobject_class, PROP_ENABLE_PLAYLIST,
@@ -521,8 +648,10 @@ static void gst_projectm_class_init(GstProjectMClass *klass) {
   scope_class->supported_gl_api = GST_GL_API_OPENGL3 | GST_GL_API_GLES2;
   scope_class->gl_start = GST_DEBUG_FUNCPTR(gst_projectm_gl_start);
   scope_class->gl_stop = GST_DEBUG_FUNCPTR(gst_projectm_gl_stop);
-  scope_class->gl_render = GST_DEBUG_FUNCPTR(gst_projectm_render);
+  scope_class->fill_gl_memory = GST_DEBUG_FUNCPTR(gst_projectm_fill_gl_memory);
   scope_class->setup = GST_DEBUG_FUNCPTR(gst_projectm_setup);
+  scope_class->prepare_output_buffer =
+      GST_DEBUG_FUNCPTR(gst_projectm_prepare_output_buffer);
 }
 
 static gboolean plugin_init(GstPlugin *plugin) {

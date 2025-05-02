@@ -15,11 +15,9 @@ GST_DEBUG_CATEGORY_STATIC(projectm_debug);
 
 projectm_handle projectm_init(GstProjectM *plugin) {
   projectm_handle handle = NULL;
-  projectm_playlist_handle playlist = NULL;
+  projectm_playlist_handle playlist = NULL;GST_DEBUG_CATEGORY_INIT(projectm_debug, "projectm", 0, "ProjectM");
 
-  GST_DEBUG_CATEGORY_INIT(projectm_debug, "projectm", 0, "ProjectM");
-
-  GstAudioVisualizer *bscope = GST_AUDIO_VISUALIZER(plugin);
+  GstPMAudioVisualizer *bscope = GST_PM_AUDIO_VISUALIZER(plugin);
 
   // Create ProjectM instance
   GST_DEBUG_OBJECT(plugin, "Creating projectM instance..");
@@ -44,9 +42,7 @@ projectm_handle projectm_init(GstProjectM *plugin) {
     // &ProjectMWrapper::PresetSwitchedEvent, static_cast<void*>(this));
   } else {
     GST_DEBUG_OBJECT(plugin, "Playlist disabled");
-  }
-
-  // Log properties
+  }// Log properties
   GST_INFO_OBJECT(
       plugin,
       "Using Properties: "
@@ -63,8 +59,7 @@ projectm_handle projectm_init(GstProjectM *plugin) {
       "easter-egg=%f, "
       "preset-locked=%d, "
       "enable-playlist=%d, "
-      "shuffle-presets=%d",
-      plugin->preset_path, plugin->texture_dir_path, plugin->beat_sensitivity,
+      "shuffle-presets=%d",plugin->preset_path, plugin->texture_dir_path, plugin->beat_sensitivity,
       plugin->hard_cut_duration, plugin->hard_cut_enabled,
       plugin->hard_cut_sensitivity, plugin->soft_cut_duration,
       plugin->preset_duration, plugin->mesh_width, plugin->mesh_height,
@@ -72,7 +67,7 @@ projectm_handle projectm_init(GstProjectM *plugin) {
       plugin->enable_playlist, plugin->shuffle_presets);
 
   // Load preset file if path is provided
-  if (plugin->preset_path != NULL) {
+  if (plugin->preset_path != NULL){
     int added_count =
         projectm_playlist_add_path(playlist, plugin->preset_path, true, false);
     GST_INFO("Loaded preset path: %s, presets found: %d", plugin->preset_path,
@@ -95,8 +90,7 @@ projectm_handle projectm_init(GstProjectM *plugin) {
   // Set preset duration, or set to in infinite duration if zero
   if (plugin->preset_duration > 0.0) {
     projectm_set_preset_duration(handle, plugin->preset_duration);
-
-    // kick off the first preset
+  // kick off the first preset
     if (projectm_playlist_size(playlist) > 1 && !plugin->preset_locked) {
       projectm_playlist_play_next(playlist, true);
     }

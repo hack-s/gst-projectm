@@ -39,7 +39,7 @@ const gchar *get_video_src_cap(unsigned int type) {
 
   switch (type) {
   case 0:
-    format = GST_VIDEO_CAPS_MAKE("video/x-raw, format = (string) { ABGR }, "
+    format = GST_VIDEO_CAPS_MAKE("video/x-raw, format = (string) { RGBA }, "
                                  "framerate=(fraction)[0/1,MAX]");
     break;
   default:

@@ -27,6 +27,8 @@ add_library(gstprojectm SHARED
     src/projectm.c
     src/gstglbaseaudiovisualizer.h
     src/gstglbaseaudiovisualizer.c
+    src/gstpmaudiovisualizer.h
+    src/gstpmaudiovisualizer.c
 )
 
 target_include_directories(gstprojectm
