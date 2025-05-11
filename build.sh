@@ -99,7 +99,7 @@ prompt_install() {
             # Print example command
             echo
             echo "Done! Here's an example command:"
-            echo "gst-launch-1.0 audiotestsrc ! queue ! audioconvert ! projectm ! "video/x-raw,width=512,height=512,framerate=60/1" ! videoconvert ! $VIDEO_SINK sync=false"
+            echo "gst-launch-1.0 audiotestsrc ! queue ! audioconvert ! projectm ! "video/x-raw,width=512,height=512,framerate=60/1" ! videoconvert ! $VIDEO_SINK sync=true"
         else
             echo
             echo "Done!"

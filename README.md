@@ -60,7 +60,7 @@ The documentation has been organized into distinct files, each dedicated to a sp
 Once the plugin has been installed, you can use it something like this:
 
 ```shell
-gst-launch pipewiresrc ! queue ! audioconvert ! projectm preset=/usr/local/share/projectM/presets preset-duration=5 ! video/x-raw,width=2048,height=1440,framerate=60/1 ! videoconvert ! xvimagesink sync=false
+gst-launch pipewiresrc ! queue ! audioconvert ! projectm preset=/usr/local/share/projectM/presets preset-duration=5 ! video/x-raw,width=2048,height=1440,framerate=60/1 ! videoconvert ! xvimagesink sync=true
 ```
 
 Or to convert an audio file to video:
