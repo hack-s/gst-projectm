@@ -20,11 +20,20 @@
  * Boston, MA 02110-1301, USA.
  */
 
+/*
+ * The code in this file is based on
+ * GStreamer / gst-plugins-base / 1.19.2: gst-libs/gst/pbutils/gstaudiovisualizer.h
+ * Git Repository:
+ * https://github.com/GStreamer/gst-plugins-base/blob/master/gst-libs/gst/pbutils/gstaudiovisualizer.h
+ * Original copyright notice has been retained at the top of this file.
+ */
+
 #ifndef __GST_PM_AUDIO_VISUALIZER_H__
 #define __GST_PM_AUDIO_VISUALIZER_H__
 
 #include <gst/base/gstbasetransform.h>
 #include <gst/gst.h>
+#include <gst/gl/gstgl_fwd.h>
 
 #include <gst/audio/audio.h>
 #include <gst/base/gstadapter.h>

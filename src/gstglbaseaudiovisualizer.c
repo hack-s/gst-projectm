@@ -68,6 +68,8 @@ struct _GstGLBaseAudioVisualizerPrivate {
   gboolean gl_started;
 
   GRecMutex context_lock;
+  GstClockTime first_frame_time;
+  gboolean first_frame_received;
 };
 
 /* Properties */
@@ -170,6 +172,8 @@ static void gst_gl_base_audio_visualizer_init(GstGLBaseAudioVisualizer *glav) {
   glav->priv->gl_result = TRUE;
   glav->priv->in_audio = NULL;
   glav->priv->out_tex = NULL;
+  glav->priv->first_frame_received = FALSE;
+  glav->priv->first_frame_time = 0;
   glav->context = NULL;
   glav->priv->timestamp_offset = 0;
   g_rec_mutex_init(&glav->priv->context_lock);
@@ -324,6 +328,22 @@ static void _fill_gl(GstGLContext *context, GstGLBaseAudioVisualizer *glav) {
       klass->fill_gl_memory(glav, glav->priv->in_audio, glav->priv->out_tex);
 }
 
+static GstClockTime get_time_since_first_frame(GstGLBaseAudioVisualizer *glav,
+                                            GstVideoFrame *frame) {
+  if (!glav->priv->first_frame_received) {
+    // Store the timestamp of the first frame
+    glav->priv->first_frame_time = GST_BUFFER_PTS(frame->buffer);
+    glav->priv->first_frame_received = TRUE;
+    return 0.0;
+  }
+
+  // Calculate elapsed time
+  GstClockTime current_time = GST_BUFFER_PTS(frame->buffer);
+  GstClockTime elapsed_time = current_time - glav->priv->first_frame_time;
+
+  return elapsed_time;
+}
+
 static GstFlowReturn
 gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
                                   GstGLBaseAudioVisualizer *glav,
@@ -362,6 +382,11 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
 
   glav->priv->out_tex = (GstGLMemory *)video->map[0].memory;
   glav->priv->in_audio = audio;
+  glav->pts = get_time_since_first_frame(glav, video);
+
+  GstBuffer *buffer = video->buffer;
+
+  glav->priv->in_audio = audio;
 
   gst_gl_context_thread_add(glav->context, (GstGLContextThreadFunc)_fill_gl,
                             glav);
@@ -372,7 +397,6 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
   if (!glav->priv->gl_result)
     goto gl_error;
 
-  GstBuffer *buffer = video->buffer;
 
   sync_meta = gst_buffer_get_gl_sync_meta(buffer);
   if (sync_meta)

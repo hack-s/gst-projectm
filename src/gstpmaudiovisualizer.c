@@ -33,6 +33,14 @@
  * new frame.
  */
 
+/*
+ * The code in this file is based on
+ * GStreamer / gst-plugins-base / 1.19.2: gst-libs/gst/pbutils/gstaudiovisualizer.h
+ * Git Repository:
+ * https://github.com/GStreamer/gst-plugins-base/blob/master/gst-libs/gst/pbutils/gstaudiovisualizer.h
+ * Original copyright notice has been retained at the top of this file.
+ */
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -753,10 +761,11 @@ static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
     if (!(adata = (gpointer)gst_adapter_map(scope->priv->adapter, sbpf)))
       break;
 
+    // projectm patch: modification to allocate GL memory
     gst_video_frame_map(&outframe, &scope->vinfo, outbuf,
                         GST_MAP_WRITE | GST_MAP_GL);
 
-    /*
+    /* projectm patch: removed cpu based shader
     if (scope->priv->shader) {
       gst_video_frame_copy (&outframe, &scope->priv->tempframe);
     } else {
@@ -783,7 +792,7 @@ static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
       } else {
         /* run various post processing (shading and geometric transformation) */
         /* FIXME: SHADER assumes 32bpp */
-        /*
+        /* projectm patch: removed cpu based shader
         if (scope->priv->shader &&
             GST_VIDEO_INFO_COMP_PSTRIDE (&scope->vinfo, 0) == 4) {
           scope->priv->shader (scope, &outframe, &scope->priv->tempframe);

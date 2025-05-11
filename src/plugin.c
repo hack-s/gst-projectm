@@ -26,9 +26,6 @@ GST_DEBUG_CATEGORY_STATIC(gst_projectm_debug);
 struct _GstProjectMPrivate {
   projectm_handle handle;
 
-  GstClockTime first_frame_time;
-  gboolean first_frame_received;
-
   GstGLFramebuffer *fbo;
   GLuint textureID;
   GstBuffer *in_audio;
@@ -411,25 +408,6 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
   return TRUE;
 }
 
-static double get_seconds_since_first_frame(GstProjectM *plugin,
-                                            GstVideoFrame *frame) {
-  if (!plugin->priv->first_frame_received) {
-    // Store the timestamp of the first frame
-    plugin->priv->first_frame_time = GST_BUFFER_PTS(frame->buffer);
-    plugin->priv->first_frame_received = TRUE;
-    return 0.0;
-  }
-
-  // Calculate elapsed time
-  GstClockTime current_time = GST_BUFFER_PTS(frame->buffer);
-  GstClockTime elapsed_time = current_time - plugin->priv->first_frame_time;
-
-  // Convert to fractional seconds
-  gdouble elapsed_seconds = (gdouble)elapsed_time / GST_SECOND;
-
-  return elapsed_seconds;
-}
-
 // TODO: CLEANUP & ADD DEBUGGING
 static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
   GstProjectM *plugin = GST_PROJECTM(stuff);
@@ -439,9 +417,8 @@ static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
   gboolean result = TRUE;
 
   // get current gst (PTS) time and set projectM time
-  double seconds_since_first_frame =
-      get_seconds_since_first_frame(plugin, video);
-  projectm_set_frame_time(plugin->priv->handle, seconds_since_first_frame);
+  gdouble elapsed_seconds = (gdouble)gstav->pts / GST_SECOND;
+  projectm_set_frame_time(plugin->priv->handle, elapsed_seconds);
 
   // AUDIO
   gst_buffer_map(plugin->priv->in_audio, &audioMap, GST_MAP_READ);

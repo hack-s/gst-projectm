@@ -103,7 +103,13 @@ projectm_handle projectm_init(GstProjectM *plugin) {
   projectm_set_easter_egg(handle, plugin->easter_egg);
   projectm_set_preset_locked(handle, plugin->preset_locked);
 
-  projectm_set_fps(handle, GST_VIDEO_INFO_FPS_N(&bscope->vinfo));
+  gdouble fps;
+  gst_util_fraction_to_double(
+                                  GST_VIDEO_INFO_FPS_N(&bscope->vinfo),
+                                  GST_VIDEO_INFO_FPS_D(&bscope->vinfo),
+                                  &fps);
+
+  projectm_set_fps(handle, gst_util_gdouble_to_guint64(fps));
   projectm_set_window_size(handle, GST_VIDEO_INFO_WIDTH(&bscope->vinfo),
                            GST_VIDEO_INFO_HEIGHT(&bscope->vinfo));
 

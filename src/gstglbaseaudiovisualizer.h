@@ -81,6 +81,9 @@ struct _GstGLBaseAudioVisualizer {
   /* total running time */
   GstClockTime running_time;
 
+  /* current presentatiom time in sec */
+  GstClockTime pts;
+
   /*< private >*/
   gpointer _padding[GST_PADDING];
 
