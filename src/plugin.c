@@ -332,45 +332,6 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
       glav->context, GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
       GST_VIDEO_INFO_HEIGHT(&gstav->vinfo));
 
-  /*
-  glBindFramebuffer (GL_FRAMEBUFFER, plugin->priv->fbo->fbo_id);
-  glBindFramebuffer (GL_FRAMEBUFFER, 0);
-*/
-  /*
-   * Color Texture.
-   *
-   * IMPORTANT: create a *complete* texture with only one mipmap level.
-   */
-  // glGenTextures (1, &plugin->priv->textureID);
-  // glBindTexture (GL_TEXTURE_2D, plugin->priv->textureID);
-  // glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGB8, GST_VIDEO_INFO_WIDTH
-  // (&gstav->vinfo), GST_VIDEO_INFO_HEIGHT (&gstav->vinfo)); glTexSubImage2D
-  // (GL_TEXTURE_2D, 0, 0, 0, GST_VIDEO_INFO_WIDTH (&gstav->vinfo),
-  // GST_VIDEO_INFO_HEIGHT (&gstav->vinfo), GL_RGB,
-  //                  GL_UNSIGNED_BYTE, NULL);
-  // glBindTexture (GL_TEXTURE_2D, 0);
-
-  /*
-   * Attach empty texture to framebuffer object: drawing to scene_fbo will use
-   * scene_texture as the backing storage.
-   */
-  // glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-  // GL_TEXTURE_2D,
-  //                          plugin->priv->textureID, 0);
-  //
-  //  glReadBuffer (GL_COLOR_ATTACHMENT0);
-
-  //  GLenum DrawBuffers[1] = { GL_COLOR_ATTACHMENT0 };
-  //  glDrawBuffers (1, DrawBuffers);
-
-  /* Sanity check. */
-  //  if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-  //  {
-  //    g_error("glCheckFramebufferStatus() failed.\n");
-  //  }
-
-  //  glBindFramebuffer (GL_FRAMEBUFFER, 0);
-
   GST_INFO_OBJECT(plugin, "GL start complete");
   return TRUE;
 }
