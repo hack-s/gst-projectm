@@ -601,7 +601,7 @@ static void gst_projectm_class_init(GstProjectMClass *klass) {
           "preset-locked", "Preset Locked",
           "Locks or unlocks the current preset. When locked, the visualizer "
           "remains on the current preset without automatic changes.",
-          DEFAULT_PRESET_LOCKED,G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+          DEFAULT_PRESET_LOCKED, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property(
       gobject_class, PROP_ENABLE_PLAYLIST,

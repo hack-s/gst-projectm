@@ -158,8 +158,7 @@ gst_gl_base_audio_visualizer_class_init(GstGLBaseAudioVisualizerClass *klass) {
       GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_default_gl_start);
   klass->gl_stop =
       GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_default_gl_stop);
-  klass->setup =
-      GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_default_setup);
+  klass->setup = GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_default_setup);
   klass->fill_gl_memory =
       GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_default_fill_gl_memory);
   klass->prepare_output_buffer = GST_DEBUG_FUNCPTR(
@@ -300,7 +299,7 @@ static void gst_gl_base_audio_visualizer_gl_stop(GstGLContext *context,
 }
 
 static GstFlowReturn gst_gl_base_audio_visualizer_default_prepare_output_buffer(
-  GstGLBaseAudioVisualizer *scope, GstBuffer **outbuf) {
+    GstGLBaseAudioVisualizer *scope, GstBuffer **outbuf) {
   GstPMAudioVisualizer *pmav = GST_PM_AUDIO_VISUALIZER(scope);
   return gst_pm_audio_visualizer_prepare_output_buffer(pmav, outbuf);
 }
@@ -329,7 +328,7 @@ static void _fill_gl(GstGLContext *context, GstGLBaseAudioVisualizer *glav) {
 }
 
 static GstClockTime get_time_since_first_frame(GstGLBaseAudioVisualizer *glav,
-                                            GstVideoFrame *frame) {
+                                               GstVideoFrame *frame) {
   if (!glav->priv->first_frame_received) {
     // Store the timestamp of the first frame
     glav->priv->first_frame_time = GST_BUFFER_PTS(frame->buffer);
@@ -396,7 +395,6 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
 
   if (!glav->priv->gl_result)
     goto gl_error;
-
 
   sync_meta = gst_buffer_get_gl_sync_meta(buffer);
   if (sync_meta)
