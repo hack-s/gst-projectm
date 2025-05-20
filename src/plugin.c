@@ -8,7 +8,6 @@
 #endif
 #include <gst/gl/gstglfuncs.h>
 #include <gst/gst.h>
-#include <gst/pbutils/gstaudiovisualizer.h>
 
 #include <projectM-4/projectM.h>
 
@@ -277,7 +276,7 @@ static void gst_projectm_gl_stop(GstGLBaseAudioVisualizer *src) {
   }
 
   if (plugin->priv->allocation_params) {
-    gst_gl_allocation_params_free(plugin->priv->allocation_params);
+    gst_gl_video_allocation_params_free_data(plugin->priv->allocation_params);
     plugin->priv->allocation_params = NULL;
   }
 }
