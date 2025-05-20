@@ -12,6 +12,11 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE(GstProjectM, gst_projectm, GST, PROJECTM,
                      GstGLBaseAudioVisualizer)
 
+/*
+ * Main plug-in. Handles interactions with projectM. Extends plug-ins for gl
+ * context handling and audio-visualization (timing, video frame data).
+ * GstProjectM -> GstGLBaseAudioVisualizer -> GstPMAudioVisualizer.
+ */
 struct _GstProjectM {
   GstGLBaseAudioVisualizer element;
 

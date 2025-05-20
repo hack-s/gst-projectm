@@ -78,11 +78,9 @@ struct _GstGLBaseAudioVisualizer {
   GstGLDisplay *display;
   GstGLContext *context;
 
-  /* total running time */
+  /* buffer running time (determined by no. of frames rendered). clock for
+   * buffer position. */
   GstClockTime running_time;
-
-  /* current presentatiom time in sec */
-  GstClockTime pts;
 
   /*< private >*/
   gpointer _padding[GST_PADDING];
@@ -107,11 +105,16 @@ struct _GstGLBaseAudioVisualizerClass {
 
   /*< public >*/
   GstGLAPI supported_gl_api;
+  /* called when gl context starts */
   gboolean (*gl_start)(GstGLBaseAudioVisualizer *glav);
+  /* called when gl context stops */
   void (*gl_stop)(GstGLBaseAudioVisualizer *glav);
+  /* called once for the pipeline in the beginning */
   gboolean (*setup)(GstGLBaseAudioVisualizer *glav);
+  /* called to render each frame */
   gboolean (*fill_gl_memory)(GstGLBaseAudioVisualizer *glav,
                              GstBuffer *in_audio, GstGLMemory *mem);
+  /* allocate buffer for frame rendering */
   GstFlowReturn (*prepare_output_buffer)(GstGLBaseAudioVisualizer *glav,
                                          GstBuffer **outbuf);
 

@@ -39,6 +39,9 @@
  * gst-libs/gst/pbutils/gstaudiovisualizer.h Git Repository:
  * https://github.com/GStreamer/gst-plugins-base/blob/master/gst-libs/gst/pbutils/gstaudiovisualizer.h
  * Original copyright notice has been retained at the top of this file.
+ *
+ * The code has been modified to map gl memory for the video output buffer and
+ * expose pts running_time. Support for CPU based shaders has been removed.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -697,11 +700,12 @@ static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
     if (GST_CLOCK_TIME_IS_VALID(ts)) {
       GstClockTime earliest_time;
       gdouble proportion;
-      gint64 qostime;
+      guint64 qostime;
 
-      qostime = gst_segment_to_running_time(&scope->priv->segment,
-                                            GST_FORMAT_TIME, ts) +
-                scope->priv->frame_duration;
+      scope->running_time = gst_segment_to_running_time(&scope->priv->segment,
+                                                        GST_FORMAT_TIME, ts);
+
+      qostime = scope->running_time + scope->priv->frame_duration;
 
       GST_OBJECT_LOCK(scope);
       earliest_time = scope->priv->earliest_time;

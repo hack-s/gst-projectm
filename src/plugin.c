@@ -298,13 +298,18 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
 
   glGenTextures(1, &plugin->priv->textureID);
   glBindTexture(GL_TEXTURE_2D, plugin->priv->textureID);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
-               GST_VIDEO_INFO_HEIGHT(&gstav->vinfo), 0, GL_RGBA,
-               GL_UNSIGNED_BYTE, NULL);
-  // glTexStorage2D (GL_TEXTURE_2D, 1, GL_RGBA8, GST_VIDEO_INFO_WIDTH
-  // (&gstav->vinfo), GST_VIDEO_INFO_HEIGHT (&gstav->vinfo)); glTexSubImage2D
-  // (GL_TEXTURE_2D, 0, 0, 0, GST_VIDEO_INFO_WIDTH (&gstav->vinfo),
-  // GST_VIDEO_INFO_HEIGHT (&gstav->vinfo), GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+  /* glTexImage2D cloud be used if needed  */
+  // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+  // GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
+  //              GST_VIDEO_INFO_HEIGHT(&gstav->vinfo), 0, GL_RGBA,
+  //              GL_UNSIGNED_BYTE, NULL);
+
+  // use immutable texture buffer
+  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8,
+                 GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
+                 GST_VIDEO_INFO_HEIGHT(&gstav->vinfo));
+
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -348,10 +353,6 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
   bscope->req_spf =
       (bscope->ainfo.channels * bscope->ainfo.rate * 2) / bscope->vinfo.fps_n;
 
-  // get GStreamer video format and map it to the corresponding OpenGL pixel
-  // format
-  const GstVideoFormat video_format = GST_VIDEO_INFO_FORMAT(&bscope->vinfo);
-
   // Log audio info
   GST_DEBUG_OBJECT(
       glav, "Audio Information <Channels: %d, SampleRate: %d, Description: %s>",
@@ -373,13 +374,14 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
 static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
   GstProjectM *plugin = GST_PROJECTM(stuff);
   GstGLBaseAudioVisualizer *gstav = GST_GL_BASE_AUDIO_VISUALIZER(stuff);
+  GstPMAudioVisualizer *pmav = GST_PM_AUDIO_VISUALIZER(stuff);
 
   GstMapInfo audioMap;
   gboolean result = TRUE;
 
   // get current gst (PTS) time and set projectM time
-  gdouble elapsed_seconds = (gdouble)gstav->pts / GST_SECOND;
-  projectm_set_frame_time(plugin->priv->handle, elapsed_seconds);
+  gdouble seconds_since_first_frame = (gdouble)pmav->running_time / GST_SECOND;
+  projectm_set_frame_time(plugin->priv->handle, seconds_since_first_frame);
 
   // AUDIO
   gst_buffer_map(plugin->priv->in_audio, &audioMap, GST_MAP_READ);

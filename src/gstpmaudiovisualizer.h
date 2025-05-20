@@ -70,6 +70,9 @@ struct _GstPMAudioVisualizer {
   /* audio state */
   GstAudioInfo ainfo;
 
+  /* current pts running time for syncing renderers */
+  guint64 running_time;
+
   /*< private >*/
   GstPMAudioVisualizerPrivate *priv;
 };
@@ -86,8 +89,10 @@ struct _GstPMAudioVisualizerClass {
   gboolean (*render)(GstPMAudioVisualizer *scope, GstBuffer *audio,
                      GstVideoFrame *video);
 
+  /* virtual function for gl buffer pool allocation  */
   gboolean (*decide_allocation)(GstPMAudioVisualizer *scope, GstQuery *query);
 
+  /* virtual function for output buffer allocation */
   GstFlowReturn (*prepare_output_buffer)(GstPMAudioVisualizer *scope,
                                          GstBuffer **outbuf);
 };

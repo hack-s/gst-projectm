@@ -243,8 +243,7 @@ static void gst_gl_base_audio_visualizer_set_context(GstElement *element,
     if (old_display != new_display) {
       gst_clear_object(&glav->context);
       if (gst_gl_base_audio_visualizer_find_gl_context_unlocked(glav)) {
-        // TODO does this need to be handled ?
-        // gst_pad_mark_reconfigure (GST_BASE_SRC_PAD (glav));
+        gst_pad_mark_reconfigure(GST_BASE_SRC_PAD(glav));
       }
     }
   }
@@ -270,7 +269,6 @@ static void gst_gl_base_audio_visualizer_gl_start(GstGLContext *context,
   GstGLBaseAudioVisualizer *glav = GST_GL_BASE_AUDIO_VISUALIZER(data);
   GstGLBaseAudioVisualizerClass *glav_class =
       GST_GL_BASE_AUDIO_VISUALIZER_GET_CLASS(glav);
-  GstPMAudioVisualizer *gstav = GST_PM_AUDIO_VISUALIZER(glav);
 
   GST_INFO_OBJECT(glav, "starting");
   gst_gl_insert_debug_marker(glav->context, "starting element %s",
@@ -327,22 +325,6 @@ static void _fill_gl(GstGLContext *context, GstGLBaseAudioVisualizer *glav) {
       klass->fill_gl_memory(glav, glav->priv->in_audio, glav->priv->out_tex);
 }
 
-static GstClockTime get_time_since_first_frame(GstGLBaseAudioVisualizer *glav,
-                                               GstVideoFrame *frame) {
-  if (!glav->priv->first_frame_received) {
-    // Store the timestamp of the first frame
-    glav->priv->first_frame_time = GST_BUFFER_PTS(frame->buffer);
-    glav->priv->first_frame_received = TRUE;
-    return 0.0;
-  }
-
-  // Calculate elapsed time
-  GstClockTime current_time = GST_BUFFER_PTS(frame->buffer);
-  GstClockTime elapsed_time = current_time - glav->priv->first_frame_time;
-
-  return elapsed_time;
-}
-
 static GstFlowReturn
 gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
                                   GstGLBaseAudioVisualizer *glav,
@@ -359,29 +341,9 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
                  glav->priv->n_frames == 1))
     goto eos;
 
-  // there is an issue here: the video buffer has already been mapped without
-  // GST_MAP_GL flag
-
-  /*
-  GstBuffer *buffer;
-
-  // Allocate a buffer of specific size
-  buffer = gst_gl_buffer_new_wrapped (g_malloc0 (bscope->vinfo.size),
-  bscope->vinfo.size);
-
-  // Map the buffer to set its memory data
-  GstVideoFrame map;
-
-  //gst_video_frame_unmap (video);
-
-  if (!gst_video_frame_map (&map, &bscope->vinfo, buffer,
-                            GST_MAP_WRITE | GST_MAP_GL)) {
-    return GST_FLOW_NOT_NEGOTIATED;
-  }*/
-
+  // video is mapped to gl memory
   glav->priv->out_tex = (GstGLMemory *)video->map[0].memory;
   glav->priv->in_audio = audio;
-  glav->pts = get_time_since_first_frame(glav, video);
 
   GstBuffer *buffer = video->buffer;
 
