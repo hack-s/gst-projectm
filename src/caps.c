@@ -20,7 +20,7 @@ const gchar *get_audio_sink_cap(unsigned int type) {
     format =
         GST_AUDIO_CAPS_MAKE("audio/x-raw, "
                             "format = (string) " GST_AUDIO_NE(
-                                S16) ", "
+                                F32) ", "
                                      "layout = (string) interleaved, "
                                      "channels = (int) { 2 }, "
                                      "rate = (int) { 44100 }, "

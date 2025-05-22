@@ -336,8 +336,8 @@ static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav,
   //                  audioMap.size / 8, audio->offset, audio->offset_end,
   //                  bscope->ainfo.rate, bscope->vinfo.fps_n, bscope->req_spf);
 
-  projectm_pcm_add_int16(plugin->priv->handle, (gint16 *)audioMap.data,
-                         audioMap.size / 4, PROJECTM_STEREO);
+  projectm_pcm_add_float(plugin->priv->handle, (gfloat *)audioMap.data,
+                         audioMap.size / 8, PROJECTM_STEREO);
 
   // GST_DEBUG_OBJECT(plugin, "Audio Data: %d %d %d %d", ((gint16
   // *)audioMap.data)[100], ((gint16 *)audioMap.data)[101], ((gint16
