@@ -26,7 +26,7 @@ struct _GstProjectMPrivate {
   projectm_handle handle;
 
   GstGLFramebuffer *fbo;
-  GLuint textureID;
+  GLuint texture_id;
   GstBuffer *in_audio;
   GstGLMemory *mem;
   GstGLVideoAllocationParams *allocation_params;
@@ -55,7 +55,7 @@ static GstBuffer *wrap_gl_texture(GstGLBaseAudioVisualizer *glav,
     return NULL;
   }
 
-  wrapped[0] = (gpointer)plugin->priv->textureID;
+  wrapped[0] = (gpointer)plugin->priv->texture_id;
   formats[0] = GST_GL_RGBA8;
 
   // * Wrap the texture into GLMemory. *
@@ -245,7 +245,7 @@ static void gst_projectm_init(GstProjectM *plugin) {
   plugin->preset_locked = DEFAULT_PRESET_LOCKED;
   plugin->priv->handle = NULL;
   plugin->priv->fbo = NULL;
-  plugin->priv->textureID = 0;
+  plugin->priv->texture_id = 0;
   plugin->priv->in_audio = NULL;
   plugin->priv->mem = NULL;
   plugin->priv->allocation_params = NULL;
@@ -270,9 +270,9 @@ static void gst_projectm_gl_stop(GstGLBaseAudioVisualizer *src) {
     plugin->priv->fbo = NULL;
   }
 
-  if (plugin->priv->textureID) {
-    glDeleteTextures(1, &plugin->priv->textureID);
-    plugin->priv->textureID = 0;
+  if (plugin->priv->texture_id) {
+    glDeleteTextures(1, &plugin->priv->texture_id);
+    plugin->priv->texture_id = 0;
   }
 
   if (plugin->priv->allocation_params) {
@@ -295,8 +295,8 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
   }
 #endif
 
-  glGenTextures(1, &plugin->priv->textureID);
-  glBindTexture(GL_TEXTURE_2D, plugin->priv->textureID);
+  glGenTextures(1, &plugin->priv->texture_id);
+  glBindTexture(GL_TEXTURE_2D, plugin->priv->texture_id);
 
   /* allocate texture using glTexImage2D */
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
@@ -319,7 +319,7 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
   plugin->priv->allocation_params =
       gst_gl_video_allocation_params_new_wrapped_texture(
           glav->context, NULL, &gstav->vinfo, 0, NULL, GST_GL_TEXTURE_TARGET_2D,
-          GST_GL_RGBA, plugin->priv->textureID, NULL, 0);
+          GST_GL_RGBA, plugin->priv->texture_id, NULL, 0);
 
   // Check if ProjectM instance exists, and create if not
   if (!plugin->priv->handle) {
