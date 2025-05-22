@@ -339,7 +339,8 @@ static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav,
 
   projectm_pcm_add_float(
       plugin->priv->handle, (gfloat *)audioMap.data,
-      audioMap.size / (sizeof(float) * gstav->ainfo.channels), PROJECTM_STEREO);
+      audioMap.size / (sizeof(float) * gstav->ainfo.channels),
+      gstav->ainfo.channels == 1 ? PROJECTM_MONO : PROJECTM_STEREO);
 
   // GST_DEBUG_OBJECT(plugin, "Audio Data: %d %d %d %d", ((gint16
   // *)audioMap.data)[100], ((gint16 *)audioMap.data)[101], ((gint16
