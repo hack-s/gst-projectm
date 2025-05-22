@@ -34,7 +34,6 @@
 
 #include "gstpmaudiovisualizer.h"
 #include <gst/gl/gstgl_fwd.h>
-#include <gst/video/video-info.h>
 #include <stdint.h>
 
 typedef struct _GstGLBaseAudioVisualizer GstGLBaseAudioVisualizer;
@@ -77,10 +76,6 @@ struct _GstGLBaseAudioVisualizer {
   /*< public >*/
   GstGLDisplay *display;
   GstGLContext *context;
-
-  /* buffer running time (determined by no. of frames rendered). clock for
-   * buffer position. */
-  GstClockTime running_time;
 
   /*< private >*/
   gpointer _padding[GST_PADDING];

@@ -59,8 +59,8 @@
 #include <gst/gl/gstglmemory.h>
 #include <gst/pbutils/pbutils-enumtypes.h>
 
-GST_DEBUG_CATEGORY_STATIC(audio_visualizer_debug);
-#define GST_CAT_DEFAULT (audio_visualizer_debug)
+GST_DEBUG_CATEGORY_STATIC(pm_audio_visualizer_debug);
+#define GST_CAT_DEFAULT (pm_audio_visualizer_debug)
 
 #define DEFAULT_SHADER GST_AUDIO_VISUALIZER_SHADER_FADE
 #define DEFAULT_SHADE_AMOUNT 0x000a0a0a
@@ -70,42 +70,55 @@ enum { PROP_0 };
 static GstBaseTransformClass *parent_class = NULL;
 static gint private_offset = 0;
 
-static void gst_audio_visualizer_class_init(GstPMAudioVisualizerClass *klass);
-static void gst_audio_visualizer_init(GstPMAudioVisualizer *scope,
-                                      GstPMAudioVisualizerClass *g_class);
-static void gst_audio_visualizer_set_property(GObject *object, guint prop_id,
-                                              const GValue *value,
-                                              GParamSpec *pspec);
-static void gst_audio_visualizer_get_property(GObject *object, guint prop_id,
-                                              GValue *value, GParamSpec *pspec);
-static void gst_audio_visualizer_dispose(GObject *object);
+static void
+gst_pm_audio_visualizer_class_init(GstPMAudioVisualizerClass *klass);
+static void gst_pm_audio_visualizer_init(GstPMAudioVisualizer *scope,
+                                         GstPMAudioVisualizerClass *g_class);
+static void gst_pm_audio_visualizer_set_property(GObject *object, guint prop_id,
+                                                 const GValue *value,
+                                                 GParamSpec *pspec);
+static void gst_pm_audio_visualizer_get_property(GObject *object, guint prop_id,
+                                                 GValue *value,
+                                                 GParamSpec *pspec);
+static void gst_pm_audio_visualizer_dispose(GObject *object);
 
-static gboolean gst_audio_visualizer_src_negotiate(GstPMAudioVisualizer *scope);
-static gboolean gst_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
-                                                 GstCaps *caps);
-static gboolean gst_audio_visualizer_sink_setcaps(GstPMAudioVisualizer *scope,
-                                                  GstCaps *caps);
+static gboolean
+gst_pm_audio_visualizer_src_negotiate(GstPMAudioVisualizer *scope);
+static gboolean gst_pm_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
+                                                    GstCaps *caps);
+static gboolean
+gst_pm_audio_visualizer_sink_setcaps(GstPMAudioVisualizer *scope,
+                                     GstCaps *caps);
 
-static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
-                                                GstBuffer *buffer);
+static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
+                                                   GstObject *parent,
+                                                   GstBuffer *buffer);
 
-static gboolean gst_audio_visualizer_src_event(GstPad *pad, GstObject *parent,
-                                               GstEvent *event);
-static gboolean gst_audio_visualizer_sink_event(GstPad *pad, GstObject *parent,
-                                                GstEvent *event);
+static gboolean gst_pm_audio_visualizer_src_event(GstPad *pad,
+                                                  GstObject *parent,
+                                                  GstEvent *event);
+static gboolean gst_pm_audio_visualizer_sink_event(GstPad *pad,
+                                                   GstObject *parent,
+                                                   GstEvent *event);
 
-static gboolean gst_audio_visualizer_src_query(GstPad *pad, GstObject *parent,
-                                               GstQuery *query);
+static gboolean gst_pm_audio_visualizer_src_query(GstPad *pad,
+                                                  GstObject *parent,
+                                                  GstQuery *query);
 
 static GstStateChangeReturn
-gst_audio_visualizer_change_state(GstElement *element,
-                                  GstStateChange transition);
+gst_pm_audio_visualizer_change_state(GstElement *element,
+                                     GstStateChange transition);
 
-static gboolean gst_audio_visualizer_do_bufferpool(GstPMAudioVisualizer *scope,
-                                                   GstCaps *outcaps);
+static gboolean
+gst_pm_audio_visualizer_do_bufferpool(GstPMAudioVisualizer *scope,
+                                      GstCaps *outcaps);
 
-static gboolean default_decide_allocation(GstPMAudioVisualizer *scope,
-                                          GstQuery *query);
+static gboolean
+gst_pm_audio_visualizer_default_decide_allocation(GstPMAudioVisualizer *scope,
+                                                  GstQuery *query);
+
+static void gst_pm_audio_visualizer_default_map_output_buffer(
+    GstPMAudioVisualizer *scope, GstVideoFrame *outframe, GstBuffer *outbuf);
 
 struct _GstPMAudioVisualizerPrivate {
   gboolean negotiated;
@@ -122,8 +135,6 @@ struct _GstPMAudioVisualizerPrivate {
   GstAdapter *adapter;
 
   GstBuffer *inbuf;
-  GstBuffer *tempbuf;
-  GstVideoFrame tempframe;
 
   guint spf; /* samples per video frame */
   guint64 frame_duration;
@@ -151,12 +162,12 @@ GType gst_pm_audio_visualizer_get_type(void) {
         sizeof(GstPMAudioVisualizerClass),
         NULL,
         NULL,
-        (GClassInitFunc)gst_audio_visualizer_class_init,
+        (GClassInitFunc)gst_pm_audio_visualizer_class_init,
         NULL,
         NULL,
         sizeof(GstPMAudioVisualizer),
         0,
-        (GInstanceInitFunc)gst_audio_visualizer_init,
+        (GInstanceInitFunc)gst_pm_audio_visualizer_init,
     };
     GType _type;
 
@@ -178,7 +189,8 @@ gst_audio_visualizer_get_instance_private(GstPMAudioVisualizer *self) {
   return (G_STRUCT_MEMBER_P(self, private_offset));
 }
 
-static void gst_audio_visualizer_class_init(GstPMAudioVisualizerClass *klass) {
+static void
+gst_pm_audio_visualizer_class_init(GstPMAudioVisualizerClass *klass) {
   GObjectClass *gobject_class = (GObjectClass *)klass;
   GstElementClass *element_class = (GstElementClass *)klass;
 
@@ -187,24 +199,26 @@ static void gst_audio_visualizer_class_init(GstPMAudioVisualizerClass *klass) {
 
   parent_class = g_type_class_peek_parent(klass);
 
-  GST_DEBUG_CATEGORY_INIT(audio_visualizer_debug,
-                          "baseaudiovisualizer-libvisual", 0,
-                          "scope audio visualisation base class");
+  GST_DEBUG_CATEGORY_INIT(pm_audio_visualizer_debug, "pmaudiovisualizer", 0,
+                          "projectm audio visualisation base class");
 
-  gobject_class->set_property = gst_audio_visualizer_set_property;
-  gobject_class->get_property = gst_audio_visualizer_get_property;
-  gobject_class->dispose = gst_audio_visualizer_dispose;
+  gobject_class->set_property = gst_pm_audio_visualizer_set_property;
+  gobject_class->get_property = gst_pm_audio_visualizer_get_property;
+  gobject_class->dispose = gst_pm_audio_visualizer_dispose;
 
   element_class->change_state =
-      GST_DEBUG_FUNCPTR(gst_audio_visualizer_change_state);
+      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_change_state);
 
-  klass->decide_allocation = GST_DEBUG_FUNCPTR(default_decide_allocation);
+  klass->decide_allocation =
+      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_default_decide_allocation);
   klass->prepare_output_buffer =
-      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_prepare_output_buffer);
+      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_default_prepare_output_buffer);
+  klass->map_output_buffer =
+      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_default_map_output_buffer);
 }
 
-static void gst_audio_visualizer_init(GstPMAudioVisualizer *scope,
-                                      GstPMAudioVisualizerClass *g_class) {
+static void gst_pm_audio_visualizer_init(GstPMAudioVisualizer *scope,
+                                         GstPMAudioVisualizerClass *g_class) {
   GstPadTemplate *pad_template;
 
   scope->priv = gst_audio_visualizer_get_instance_private(scope);
@@ -215,19 +229,22 @@ static void gst_audio_visualizer_init(GstPMAudioVisualizer *scope,
   g_return_if_fail(pad_template != NULL);
   scope->priv->sinkpad = gst_pad_new_from_template(pad_template, "sink");
   gst_pad_set_chain_function(scope->priv->sinkpad,
-                             GST_DEBUG_FUNCPTR(gst_audio_visualizer_chain));
+                             GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_chain));
   gst_pad_set_event_function(
-      scope->priv->sinkpad, GST_DEBUG_FUNCPTR(gst_audio_visualizer_sink_event));
+      scope->priv->sinkpad,
+      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_sink_event));
   gst_element_add_pad(GST_ELEMENT(scope), scope->priv->sinkpad);
 
   pad_template =
       gst_element_class_get_pad_template(GST_ELEMENT_CLASS(g_class), "src");
   g_return_if_fail(pad_template != NULL);
   scope->priv->srcpad = gst_pad_new_from_template(pad_template, "src");
-  gst_pad_set_event_function(scope->priv->srcpad,
-                             GST_DEBUG_FUNCPTR(gst_audio_visualizer_src_event));
-  gst_pad_set_query_function(scope->priv->srcpad,
-                             GST_DEBUG_FUNCPTR(gst_audio_visualizer_src_query));
+  gst_pad_set_event_function(
+      scope->priv->srcpad,
+      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_src_event));
+  gst_pad_set_query_function(
+      scope->priv->srcpad,
+      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_src_query));
   gst_element_add_pad(GST_ELEMENT(scope), scope->priv->srcpad);
 
   scope->priv->adapter = gst_adapter_new();
@@ -246,9 +263,9 @@ static void gst_audio_visualizer_init(GstPMAudioVisualizer *scope,
   g_mutex_init(&scope->priv->config_lock);
 }
 
-static void gst_audio_visualizer_set_property(GObject *object, guint prop_id,
-                                              const GValue *value,
-                                              GParamSpec *pspec) {
+static void gst_pm_audio_visualizer_set_property(GObject *object, guint prop_id,
+                                                 const GValue *value,
+                                                 GParamSpec *pspec) {
   GstPMAudioVisualizer *scope = GST_PM_AUDIO_VISUALIZER(object);
 
   switch (prop_id) {
@@ -258,9 +275,9 @@ static void gst_audio_visualizer_set_property(GObject *object, guint prop_id,
   }
 }
 
-static void gst_audio_visualizer_get_property(GObject *object, guint prop_id,
-                                              GValue *value,
-                                              GParamSpec *pspec) {
+static void gst_pm_audio_visualizer_get_property(GObject *object, guint prop_id,
+                                                 GValue *value,
+                                                 GParamSpec *pspec) {
   GstPMAudioVisualizer *scope = GST_PM_AUDIO_VISUALIZER(object);
 
   switch (prop_id) {
@@ -270,7 +287,7 @@ static void gst_audio_visualizer_get_property(GObject *object, guint prop_id,
   }
 }
 
-static void gst_audio_visualizer_dispose(GObject *object) {
+static void gst_pm_audio_visualizer_dispose(GObject *object) {
   GstPMAudioVisualizer *scope = GST_PM_AUDIO_VISUALIZER(object);
 
   if (scope->priv->adapter) {
@@ -280,11 +297,6 @@ static void gst_audio_visualizer_dispose(GObject *object) {
   if (scope->priv->inbuf) {
     gst_buffer_unref(scope->priv->inbuf);
     scope->priv->inbuf = NULL;
-  }
-  if (scope->priv->tempbuf) {
-    gst_video_frame_unmap(&scope->priv->tempframe);
-    gst_buffer_unref(scope->priv->tempbuf);
-    scope->priv->tempbuf = NULL;
   }
   if (scope->priv->config_lock.p) {
     g_mutex_clear(&scope->priv->config_lock);
@@ -305,8 +317,9 @@ static void gst_audio_visualizer_reset(GstPMAudioVisualizer *scope) {
   GST_OBJECT_UNLOCK(scope);
 }
 
-static gboolean gst_audio_visualizer_sink_setcaps(GstPMAudioVisualizer *scope,
-                                                  GstCaps *caps) {
+static gboolean
+gst_pm_audio_visualizer_sink_setcaps(GstPMAudioVisualizer *scope,
+                                     GstCaps *caps) {
   GstAudioInfo info;
 
   if (!gst_audio_info_from_caps(&info, caps))
@@ -317,7 +330,7 @@ static gboolean gst_audio_visualizer_sink_setcaps(GstPMAudioVisualizer *scope,
   GST_DEBUG_OBJECT(scope, "audio: channels %d, rate %d",
                    GST_AUDIO_INFO_CHANNELS(&info), GST_AUDIO_INFO_RATE(&info));
 
-  if (!gst_audio_visualizer_src_negotiate(scope)) {
+  if (!gst_pm_audio_visualizer_src_negotiate(scope)) {
     goto not_negotiated;
   }
 
@@ -334,8 +347,8 @@ not_negotiated: {
 }
 }
 
-static gboolean gst_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
-                                                 GstCaps *caps) {
+static gboolean gst_pm_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
+                                                    GstCaps *caps) {
   GstVideoInfo info;
   GstPMAudioVisualizerClass *klass;
   gboolean res;
@@ -354,15 +367,6 @@ static gboolean gst_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
       GST_VIDEO_INFO_FPS_N(&info));
   scope->req_spf = scope->priv->spf;
 
-  if (scope->priv->tempbuf) {
-    gst_video_frame_unmap(&scope->priv->tempframe);
-    gst_buffer_unref(scope->priv->tempbuf);
-  }
-  scope->priv->tempbuf =
-      gst_buffer_new_wrapped(g_malloc0(scope->vinfo.size), scope->vinfo.size);
-  gst_video_frame_map(&scope->priv->tempframe, &scope->vinfo,
-                      scope->priv->tempbuf, GST_MAP_READWRITE);
-
   if (klass->setup && !klass->setup(scope))
     goto setup_failed;
 
@@ -375,7 +379,7 @@ static gboolean gst_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
   gst_pad_set_caps(scope->priv->srcpad, caps);
 
   /* find a pool for the negotiated caps now */
-  res = gst_audio_visualizer_do_bufferpool(scope, caps);
+  res = gst_pm_audio_visualizer_do_bufferpool(scope, caps);
   gst_caps_unref(caps);
 
   return res;
@@ -394,7 +398,7 @@ setup_failed: {
 }
 
 static gboolean
-gst_audio_visualizer_src_negotiate(GstPMAudioVisualizer *scope) {
+gst_pm_audio_visualizer_src_negotiate(GstPMAudioVisualizer *scope) {
   GstCaps *othercaps, *target;
   GstStructure *structure;
   GstCaps *templ;
@@ -432,7 +436,7 @@ gst_audio_visualizer_src_negotiate(GstPMAudioVisualizer *scope) {
 
   GST_DEBUG_OBJECT(scope, "final caps are %" GST_PTR_FORMAT, target);
 
-  ret = gst_audio_visualizer_src_setcaps(scope, target);
+  ret = gst_pm_audio_visualizer_src_setcaps(scope, target);
 
   return ret;
 
@@ -482,8 +486,9 @@ static gboolean gst_audio_visualizer_set_allocation(
   return TRUE;
 }
 
-static gboolean gst_audio_visualizer_do_bufferpool(GstPMAudioVisualizer *scope,
-                                                   GstCaps *outcaps) {
+static gboolean
+gst_pm_audio_visualizer_do_bufferpool(GstPMAudioVisualizer *scope,
+                                      GstCaps *outcaps) {
   GstQuery *query;
   gboolean result = TRUE;
   GstBufferPool *pool = NULL;
@@ -540,74 +545,25 @@ no_decide_allocation: {
 }
 }
 
-static gboolean default_decide_allocation(GstPMAudioVisualizer *scope,
-                                          GstQuery *query) {
-  GstCaps *outcaps;
-  GstBufferPool *pool;
-  guint size, min, max;
-  GstAllocator *allocator;
-  GstAllocationParams params;
-  GstStructure *config;
-  gboolean update_allocator;
-  gboolean update_pool;
-
-  gst_query_parse_allocation(query, &outcaps, NULL);
-
-  /* we got configuration from our peer or the decide_allocation method,
-   * parse them */
-  if (gst_query_get_n_allocation_params(query) > 0) {
-    /* try the allocator */
-    gst_query_parse_nth_allocation_param(query, 0, &allocator, &params);
-    update_allocator = TRUE;
-  } else {
-    allocator = NULL;
-    gst_allocation_params_init(&params);
-    update_allocator = FALSE;
-  }
-
-  if (gst_query_get_n_allocation_pools(query) > 0) {
-    gst_query_parse_nth_allocation_pool(query, 0, &pool, &size, &min, &max);
-    update_pool = TRUE;
-  } else {
-    pool = NULL;
-    size = GST_VIDEO_INFO_SIZE(&scope->vinfo);
-    min = max = 0;
-    update_pool = FALSE;
-  }
-
-  if (pool == NULL) {
-    /* we did not get a pool, make one ourselves then */
-    pool = gst_video_buffer_pool_new();
-  }
-
-  config = gst_buffer_pool_get_config(pool);
-  gst_buffer_pool_config_set_params(config, outcaps, size, min, max);
-  gst_buffer_pool_config_set_allocator(config, allocator, &params);
-  gst_buffer_pool_config_add_option(config, GST_BUFFER_POOL_OPTION_VIDEO_META);
-  gst_buffer_pool_set_config(pool, config);
-
-  if (update_allocator)
-    gst_query_set_nth_allocation_param(query, 0, allocator, &params);
-  else
-    gst_query_add_allocation_param(query, allocator, &params);
-
-  if (allocator)
-    gst_object_unref(allocator);
-
-  if (update_pool)
-    gst_query_set_nth_allocation_pool(query, 0, pool, size, min, max);
-  else
-    gst_query_add_allocation_pool(query, pool, size, min, max);
-
-  if (pool)
-    gst_object_unref(pool);
-
-  return TRUE;
+static gboolean
+gst_pm_audio_visualizer_default_decide_allocation(GstPMAudioVisualizer *scope,
+                                                  GstQuery *query) {
+  /* removed main memory pool implementation. This vmethod is overridden for
+   * using gl memory by gstglbaseaudiovisualizer. */
+  g_error("vmethod gst_pm_audio_visualizer_default_decide_allocation is not "
+          "implemented");
 }
 
-GstFlowReturn
-gst_pm_audio_visualizer_prepare_output_buffer(GstPMAudioVisualizer *scope,
-                                              GstBuffer **outbuf) {
+static void gst_pm_audio_visualizer_default_map_output_buffer(
+    GstPMAudioVisualizer *scope, GstVideoFrame *outframe, GstBuffer *outbuf) {
+  /* removed main memory buffer implementation. This vmethod is overridden for
+   * using gl memory by gstglbaseaudiovisualizer. */
+  g_error("vmethod gst_pm_audio_visualizer_default_map_output_buffer is not "
+          "implemented");
+}
+
+GstFlowReturn gst_pm_audio_visualizer_default_prepare_output_buffer(
+    GstPMAudioVisualizer *scope, GstBuffer **outbuf) {
   GstPMAudioVisualizerPrivate *priv;
 
   priv = scope->priv;
@@ -634,8 +590,9 @@ activate_failed: {
 }
 }
 
-static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
-                                                GstBuffer *buffer) {
+static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
+                                                   GstObject *parent,
+                                                   GstBuffer *buffer) {
   GstFlowReturn ret = GST_FLOW_OK;
   GstPMAudioVisualizer *scope;
   GstPMAudioVisualizerClass *klass;
@@ -657,7 +614,7 @@ static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
 
   /* Make sure have an output format */
   if (gst_pad_check_reconfigure(scope->priv->srcpad)) {
-    if (!gst_audio_visualizer_src_negotiate(scope)) {
+    if (!gst_pm_audio_visualizer_src_negotiate(scope)) {
       gst_pad_mark_reconfigure(scope->priv->srcpad);
       goto not_negotiated;
     }
@@ -689,7 +646,7 @@ static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
     GstBuffer *outbuf;
     GstVideoFrame outframe;
 
-    /* get timestamp of the current adapter content */
+    /* get timestamp of the current adapter content (audio input timestamp) */
     ts = gst_adapter_prev_pts(scope->priv->adapter, &dist);
     if (GST_CLOCK_TIME_IS_VALID(ts)) {
       /* convert bytes to time */
@@ -749,11 +706,15 @@ static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
     if (ret != GST_FLOW_OK)
       break;
 
-    // todo ghere
-    // gst_buffer_add_video_meta(outbuf, GST_VIDEO_FRAME_FLAG_NONE,
-    // GST_VIDEO_FORMAT_RGB, scope->vinfo.width, scope->vinfo.height);
-    // gst_video_info_set_format (&scope->vinfo, GST_VIDEO_FORMAT_ARGB,
-    // scope->vinfo.width, scope->vinfo.height);
+    /*
+    todo: need to set any buffer meta for gl ?
+    gst_buffer_add_video_meta(outbuf, GST_VIDEO_FRAME_FLAG_NONE,
+                              GST_VIDEO_FORMAT_RGBA, scope->vinfo.width,
+                              scope->vinfo.height);
+    gst_video_info_set_format (&scope->vinfo, GST_VIDEO_FORMAT_RGBA,
+         scope->vinfo.width, scope->vinfo.height);
+    */
+
     /* sync controlled properties */
     if (GST_CLOCK_TIME_IS_VALID(ts))
       gst_object_sync_values(GST_OBJECT(scope), ts);
@@ -765,23 +726,8 @@ static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
     if (!(adata = (gpointer)gst_adapter_map(scope->priv->adapter, sbpf)))
       break;
 
-    // projectm patch: modification to allocate GL memory
-    gst_video_frame_map(&outframe, &scope->vinfo, outbuf,
-                        GST_MAP_WRITE | GST_MAP_GL);
-
-    /* projectm patch: removed cpu based shader
-    if (scope->priv->shader) {
-      gst_video_frame_copy (&outframe, &scope->priv->tempframe);
-    } else {
-      // gst_video_frame_clear() or is output frame already cleared
-      gint i;
-
-      for (i = 0; i < scope->vinfo.finfo->n_planes; i++) {
-        memset (outframe.data[i], 0, outframe.map[i].size);
-      }
-
-    }
-    */
+    // projectm patch: modification to customize mapping
+    klass->map_output_buffer(scope, &outframe, outbuf);
 
     gst_buffer_replace_all_memory(
         inbuf, gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, adata, sbpf, 0,
@@ -793,14 +739,6 @@ static GstFlowReturn gst_audio_visualizer_chain(GstPad *pad, GstObject *parent,
         ret = GST_FLOW_ERROR;
         gst_video_frame_unmap(&outframe);
         goto beach;
-      } else {
-        /* run various post processing (shading and geometric transformation) */
-        /* FIXME: SHADER assumes 32bpp */
-        /* projectm patch: removed cpu based shader
-        if (scope->priv->shader &&
-            GST_VIDEO_INFO_COMP_PSTRIDE (&scope->vinfo, 0) == 4) {
-          scope->priv->shader (scope, &outframe, &scope->priv->tempframe);
-        }*/
       }
     }
     gst_video_frame_unmap(&outframe);
@@ -842,8 +780,9 @@ not_negotiated: {
 }
 }
 
-static gboolean gst_audio_visualizer_src_event(GstPad *pad, GstObject *parent,
-                                               GstEvent *event) {
+static gboolean gst_pm_audio_visualizer_src_event(GstPad *pad,
+                                                  GstObject *parent,
+                                                  GstEvent *event) {
   gboolean res;
   GstPMAudioVisualizer *scope;
 
@@ -885,8 +824,9 @@ static gboolean gst_audio_visualizer_src_event(GstPad *pad, GstObject *parent,
   return res;
 }
 
-static gboolean gst_audio_visualizer_sink_event(GstPad *pad, GstObject *parent,
-                                                GstEvent *event) {
+static gboolean gst_pm_audio_visualizer_sink_event(GstPad *pad,
+                                                   GstObject *parent,
+                                                   GstEvent *event) {
   gboolean res;
   GstPMAudioVisualizer *scope;
 
@@ -897,7 +837,7 @@ static gboolean gst_audio_visualizer_sink_event(GstPad *pad, GstObject *parent,
     GstCaps *caps;
 
     gst_event_parse_caps(event, &caps);
-    res = gst_audio_visualizer_sink_setcaps(scope, caps);
+    res = gst_pm_audio_visualizer_sink_setcaps(scope, caps);
     gst_event_unref(event);
     break;
   }
@@ -922,8 +862,9 @@ static gboolean gst_audio_visualizer_sink_event(GstPad *pad, GstObject *parent,
   return res;
 }
 
-static gboolean gst_audio_visualizer_src_query(GstPad *pad, GstObject *parent,
-                                               GstQuery *query) {
+static gboolean gst_pm_audio_visualizer_src_query(GstPad *pad,
+                                                  GstObject *parent,
+                                                  GstQuery *query) {
   gboolean res = FALSE;
   GstPMAudioVisualizer *scope;
 
@@ -980,8 +921,8 @@ static gboolean gst_audio_visualizer_src_query(GstPad *pad, GstObject *parent,
 }
 
 static GstStateChangeReturn
-gst_audio_visualizer_change_state(GstElement *element,
-                                  GstStateChange transition) {
+gst_pm_audio_visualizer_change_state(GstElement *element,
+                                     GstStateChange transition) {
   GstStateChangeReturn ret;
   GstPMAudioVisualizer *scope;
 

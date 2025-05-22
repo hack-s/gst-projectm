@@ -31,13 +31,9 @@
 #ifndef __GST_PM_AUDIO_VISUALIZER_H__
 #define __GST_PM_AUDIO_VISUALIZER_H__
 
-#include <gst/base/gstbasetransform.h>
-#include <gst/gl/gstgl_fwd.h>
 #include <gst/gst.h>
 
 #include <gst/audio/audio.h>
-#include <gst/base/gstadapter.h>
-#include <gst/pbutils/pbutils-prelude.h>
 #include <gst/video/video.h>
 
 G_BEGIN_DECLS
@@ -74,6 +70,8 @@ struct _GstPMAudioVisualizer {
   guint64 running_time;
 
   /*< private >*/
+  gpointer _padding[GST_PADDING];
+
   GstPMAudioVisualizerPrivate *priv;
 };
 
@@ -89,21 +87,22 @@ struct _GstPMAudioVisualizerClass {
   gboolean (*render)(GstPMAudioVisualizer *scope, GstBuffer *audio,
                      GstVideoFrame *video);
 
-  /* virtual function for gl buffer pool allocation  */
+  /* virtual function for buffer pool allocation  */
   gboolean (*decide_allocation)(GstPMAudioVisualizer *scope, GstQuery *query);
 
   /* virtual function for output buffer allocation */
   GstFlowReturn (*prepare_output_buffer)(GstPMAudioVisualizer *scope,
                                          GstBuffer **outbuf);
+
+  /* virtual function for mapping the output buffer to video frame */
+  void (*map_output_buffer)(GstPMAudioVisualizer *scope,
+                            GstVideoFrame *outframe, GstBuffer *outbuf);
 };
 
-GST_PBUTILS_API
 GType gst_pm_audio_visualizer_get_type(void);
 
-GST_GL_API
-GstFlowReturn
-gst_pm_audio_visualizer_prepare_output_buffer(GstPMAudioVisualizer *scope,
-                                              GstBuffer **outbuf);
+GstFlowReturn gst_pm_audio_visualizer_default_prepare_output_buffer(
+    GstPMAudioVisualizer *scope, GstBuffer **outbuf);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(GstPMAudioVisualizer, gst_object_unref)
 

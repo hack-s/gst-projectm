@@ -62,14 +62,15 @@ struct _GstGLBaseAudioVisualizerPrivate {
   GstGLMemory *out_tex;
   GstBuffer *in_audio;
 
-  gint64 timestamp_offset; /* base offset */
-  gint64 n_frames;         /* total frames sent */
+  gint64 timestamp_offset;       /* base offset */
+  gint64 n_frames;               /* total frames sent */
+  GstClockTime buf_running_time; /* determined by no. of frames rendered. clock
+                                    for buffer position. */
+
   gboolean gl_result;
   gboolean gl_started;
 
   GRecMutex context_lock;
-  GstClockTime first_frame_time;
-  gboolean first_frame_received;
 };
 
 /* Properties */
@@ -129,6 +130,9 @@ static GstFlowReturn gst_gl_base_audio_visualizer_default_prepare_output_buffer(
 static GstFlowReturn gst_gl_base_audio_visualizer_parent_prepare_output_buffer(
     GstPMAudioVisualizer *scope, GstBuffer **outbuf);
 
+static void gst_gl_base_audio_visualizer_map_output_buffer(
+    GstPMAudioVisualizer *scope, GstVideoFrame *outframe, GstBuffer *outbuf);
+
 static void
 gst_gl_base_audio_visualizer_class_init(GstGLBaseAudioVisualizerClass *klass) {
   GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
@@ -152,6 +156,8 @@ gst_gl_base_audio_visualizer_class_init(GstGLBaseAudioVisualizerClass *klass) {
   gstav_class->render = GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_render);
   gstav_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(
       gst_gl_base_audio_visualizer_parent_prepare_output_buffer);
+  gstav_class->map_output_buffer =
+      GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_map_output_buffer);
 
   klass->supported_gl_api = GST_GL_API_ANY;
   klass->gl_start =
@@ -171,8 +177,6 @@ static void gst_gl_base_audio_visualizer_init(GstGLBaseAudioVisualizer *glav) {
   glav->priv->gl_result = TRUE;
   glav->priv->in_audio = NULL;
   glav->priv->out_tex = NULL;
-  glav->priv->first_frame_received = FALSE;
-  glav->priv->first_frame_time = 0;
   glav->context = NULL;
   glav->priv->timestamp_offset = 0;
   g_rec_mutex_init(&glav->priv->context_lock);
@@ -299,7 +303,7 @@ static void gst_gl_base_audio_visualizer_gl_stop(GstGLContext *context,
 static GstFlowReturn gst_gl_base_audio_visualizer_default_prepare_output_buffer(
     GstGLBaseAudioVisualizer *scope, GstBuffer **outbuf) {
   GstPMAudioVisualizer *pmav = GST_PM_AUDIO_VISUALIZER(scope);
-  return gst_pm_audio_visualizer_prepare_output_buffer(pmav, outbuf);
+  return gst_pm_audio_visualizer_default_prepare_output_buffer(pmav, outbuf);
 }
 
 static GstFlowReturn gst_gl_base_audio_visualizer_parent_prepare_output_buffer(
@@ -308,6 +312,13 @@ static GstFlowReturn gst_gl_base_audio_visualizer_parent_prepare_output_buffer(
   GstGLBaseAudioVisualizerClass *klass =
       GST_GL_BASE_AUDIO_VISUALIZER_GET_CLASS(glav);
   return klass->prepare_output_buffer(glav, outbuf);
+}
+
+static void gst_gl_base_audio_visualizer_map_output_buffer(
+    GstPMAudioVisualizer *scope, GstVideoFrame *outframe, GstBuffer *outbuf) {
+  /* map video to gl memory */
+  gst_video_frame_map(outframe, &scope->vinfo, outbuf,
+                      GST_MAP_WRITE | GST_MAP_GL);
 }
 
 static gboolean gst_gl_base_audio_visualizer_default_fill_gl_memory(
@@ -365,7 +376,7 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
   g_rec_mutex_unlock(&glav->priv->context_lock);
 
   GST_BUFFER_TIMESTAMP(buffer) =
-      glav->priv->timestamp_offset + glav->running_time;
+      glav->priv->timestamp_offset + glav->priv->buf_running_time;
   GST_BUFFER_OFFSET(buffer) = glav->priv->n_frames;
   glav->priv->n_frames++;
   GST_BUFFER_OFFSET_END(buffer) = glav->priv->n_frames;
@@ -373,14 +384,14 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
     next_time =
         gst_util_uint64_scale_int(glav->priv->n_frames * GST_SECOND,
                                   bscope->vinfo.fps_d, bscope->vinfo.fps_n);
-    GST_BUFFER_DURATION(buffer) = next_time - glav->running_time;
+    GST_BUFFER_DURATION(buffer) = next_time - glav->priv->buf_running_time;
   } else {
     next_time = glav->priv->timestamp_offset;
     /* NONE means forever */
     GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
   }
 
-  glav->running_time = next_time;
+  glav->priv->buf_running_time = next_time;
 
   return GST_FLOW_OK;
 
@@ -427,7 +438,7 @@ gst_gl_base_audio_visualizer_render(GstPMAudioVisualizer *bscope,
 
 static void gst_gl_base_audio_visualizer_start(GstGLBaseAudioVisualizer *glav) {
   glav->priv->n_frames = 0;
-  glav->running_time = 0;
+  glav->priv->buf_running_time = 0;
 }
 
 static void gst_gl_base_audio_visualizer_stop(GstGLBaseAudioVisualizer *glav) {

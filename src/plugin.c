@@ -299,15 +299,15 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
   glBindTexture(GL_TEXTURE_2D, plugin->priv->textureID);
 
   /* allocate texture using glTexImage2D */
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-  GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
-                GST_VIDEO_INFO_HEIGHT(&gstav->vinfo), 0, GL_RGBA,
-                GL_UNSIGNED_BYTE, NULL);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
+               GST_VIDEO_INFO_HEIGHT(&gstav->vinfo), 0, GL_RGBA,
+               GL_UNSIGNED_BYTE, NULL);
 
-  /* could use immutable texture buffer, but it's GL4 / ES3 and not supported on mac os x */
-  //glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8,
-  //               GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
-  //               GST_VIDEO_INFO_HEIGHT(&gstav->vinfo));
+  /* could use immutable texture buffer, but it's GL4 / ES3 and not supported on
+   * mac os x */
+  // glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8,
+  //                GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
+  //                GST_VIDEO_INFO_HEIGHT(&gstav->vinfo));
 
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
