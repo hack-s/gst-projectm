@@ -341,31 +341,6 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
 }
 
 static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
-  GstPMAudioVisualizer *bscope = GST_PM_AUDIO_VISUALIZER(glav);
-  GstProjectM *plugin = GST_PROJECTM(glav);
-
-  // Calculate depth based on pixel stride and bits
-  gint depth = bscope->vinfo.finfo->pixel_stride[0] *
-               ((bscope->vinfo.finfo->bits >= 8) ? 8 : 1);
-
-  // Calculate required samples per frame
-  bscope->req_spf =
-      (bscope->ainfo.channels * bscope->ainfo.rate * 2) / bscope->vinfo.fps_n;
-
-  // Log audio info
-  GST_DEBUG_OBJECT(
-      glav, "Audio Information <Channels: %d, SampleRate: %d, Description: %s>",
-      bscope->ainfo.channels, bscope->ainfo.rate,
-      bscope->ainfo.finfo->description);
-
-  // Log video info
-  GST_DEBUG_OBJECT(glav,
-                   "Video Information <Dimensions: %dx%d, FPS: %d/%d, Depth: "
-                   "%dbit, SamplesPerFrame: %d>",
-                   GST_VIDEO_INFO_WIDTH(&bscope->vinfo),
-                   GST_VIDEO_INFO_HEIGHT(&bscope->vinfo), bscope->vinfo.fps_n,
-                   bscope->vinfo.fps_d, depth, bscope->req_spf);
-
   return TRUE;
 }
 
