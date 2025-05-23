@@ -29,6 +29,7 @@ struct _GstProjectMPrivate {
 
   GstClockTime first_frame_time;
   gboolean first_frame_received;
+  projectm_channels channels;
 };
 
 G_DEFINE_TYPE_WITH_CODE(GstProjectM, gst_projectm,
@@ -201,6 +202,7 @@ static void gst_projectm_init(GstProjectM *plugin) {
   plugin->easter_egg = DEFAULT_EASTER_EGG;
   plugin->preset_locked = DEFAULT_PRESET_LOCKED;
   plugin->priv->handle = NULL;
+  plugin->priv->channels = PROJECTM_STEREO;
 }
 
 static void gst_projectm_finalize(GObject *object) {
@@ -293,6 +295,8 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
                    GST_VIDEO_INFO_HEIGHT(&bscope->vinfo), bscope->vinfo.fps_n,
                    bscope->vinfo.fps_d, depth, bscope->req_spf);
 
+  plugin->priv->channels = bscope->ainfo.channels == 1 ? PROJECTM_MONO : PROJECTM_STEREO;
+
   return TRUE;
 }
 
@@ -340,7 +344,7 @@ static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav,
   projectm_pcm_add_float(
       plugin->priv->handle, (gfloat *)audioMap.data,
       audioMap.size / (sizeof(gfloat) * gstav->ainfo.channels),
-      gstav->ainfo.channels == 1 ? PROJECTM_MONO : PROJECTM_STEREO);
+      plugin->priv->channels);
 
   // GST_DEBUG_OBJECT(plugin, "Audio Data: %d %d %d %d", ((gint16
   // *)audioMap.data)[100], ((gint16 *)audioMap.data)[101], ((gint16
