@@ -633,6 +633,7 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
   g_mutex_lock(&scope->priv->config_lock);
 
   /* this is what we want */
+  /* samples per video frame * audio bytes per frame for both channels */
   sbpf = scope->req_spf * bpf;
 
   inbuf = scope->priv->inbuf;
@@ -646,7 +647,7 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     GstBuffer *outbuf;
     GstVideoFrame outframe;
 
-    /* get timestamp of the current adapter content (audio input timestamp) */
+    /* get timestamp of the current adapter content (audio input) */
     ts = gst_adapter_prev_pts(scope->priv->adapter, &dist);
     if (GST_CLOCK_TIME_IS_VALID(ts)) {
       /* convert bytes to time */
@@ -706,15 +707,6 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     if (ret != GST_FLOW_OK)
       break;
 
-    /*
-    todo: need to set any buffer meta for gl ?
-    gst_buffer_add_video_meta(outbuf, GST_VIDEO_FRAME_FLAG_NONE,
-                              GST_VIDEO_FORMAT_RGBA, scope->vinfo.width,
-                              scope->vinfo.height);
-    gst_video_info_set_format (&scope->vinfo, GST_VIDEO_FORMAT_RGBA,
-         scope->vinfo.width, scope->vinfo.height);
-    */
-
     /* sync controlled properties */
     if (GST_CLOCK_TIME_IS_VALID(ts))
       gst_object_sync_values(GST_OBJECT(scope), ts);
@@ -726,9 +718,10 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     if (!(adata = (gpointer)gst_adapter_map(scope->priv->adapter, sbpf)))
       break;
 
-    // projectm patch: modification to customize mapping
+    /* allow customized memory to video frame mapping */
     klass->map_output_buffer(scope, &outframe, outbuf);
 
+    /* place sbpf number of bytes of audio data into inbuf  */
     gst_buffer_replace_all_memory(
         inbuf, gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, adata, sbpf, 0,
                                       sbpf, NULL, NULL));

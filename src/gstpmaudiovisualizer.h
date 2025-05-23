@@ -47,9 +47,9 @@ G_BEGIN_DECLS
 #define GST_PM_AUDIO_VISUALIZER_GET_CLASS(obj)                                 \
   (G_TYPE_INSTANCE_GET_CLASS((obj), GST_TYPE_PM_AUDIO_VISUALIZER,              \
                              GstPMAudioVisualizerClass))
-#define GST_IS_SYNAESTHESIA(obj)                                               \
+#define GST_PM_IS_SYNAESTHESIA(obj)                                               \
   (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_PM_AUDIO_VISUALIZER))
-#define GST_IS_SYNAESTHESIA_CLASS(klass)                                       \
+#define GST_PM_IS_SYNAESTHESIA_CLASS(klass)                                       \
   (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_PM_AUDIO_VISUALIZER))
 typedef struct _GstPMAudioVisualizer GstPMAudioVisualizer;
 typedef struct _GstPMAudioVisualizerClass GstPMAudioVisualizerClass;
@@ -58,7 +58,8 @@ typedef struct _GstPMAudioVisualizerPrivate GstPMAudioVisualizerPrivate;
 struct _GstPMAudioVisualizer {
   GstElement parent;
 
-  guint req_spf; /* min samples per frame wanted by the subclass */
+  /* min samples per frame wanted by the subclass (one channel) */
+  guint req_spf;
 
   /* video state */
   GstVideoInfo vinfo;
@@ -75,6 +76,18 @@ struct _GstPMAudioVisualizer {
   GstPMAudioVisualizerPrivate *priv;
 };
 
+/**
+ * GstPMAudioVisualizerClass:
+ * @decide_allocation: buffer pool allocation
+ * @prepare_output_buffer: allocate a buffer for rendering a frame.
+ * @map_output_buffer: map video frame to memory buffer.
+ * @render: render a frame from an audio buffer.
+ * @setup: called whenever the format changes.
+ *
+ * Base class for audio visualizers, derived from gstreamer
+ * GstAudioVisualizerClass. This plugin handles rendering video frames with a
+ * fixed framerate from audio input samples.
+ */
 struct _GstPMAudioVisualizerClass {
   /*< private >*/
   GstElementClass parent_class;

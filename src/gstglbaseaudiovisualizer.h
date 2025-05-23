@@ -93,8 +93,9 @@ struct _GstGLBaseAudioVisualizer {
  * GstPMAudioVisualizer.setup)
  *
  * The base class for OpenGL based audio visualizers.
- *
- */
+ * Extends GstPMAudioVisualizer to add GL rendering callbacks.
+ * Handles GL context and render buffers.
+*/
 struct _GstGLBaseAudioVisualizerClass {
   GstPMAudioVisualizerClass parent_class;
 
@@ -104,7 +105,7 @@ struct _GstGLBaseAudioVisualizerClass {
   gboolean (*gl_start)(GstGLBaseAudioVisualizer *glav);
   /* called when gl context stops */
   void (*gl_stop)(GstGLBaseAudioVisualizer *glav);
-  /* called once for the pipeline in the beginning */
+  /* called when caps have been set for the pipeline */
   gboolean (*setup)(GstGLBaseAudioVisualizer *glav);
   /* called to render each frame */
   gboolean (*fill_gl_memory)(GstGLBaseAudioVisualizer *glav,
