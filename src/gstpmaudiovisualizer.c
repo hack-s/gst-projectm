@@ -50,13 +50,9 @@
 
 #include <string.h>
 
-#include <gst/gl/gstglbuffer.h>
-#include <gst/video/gstvideometa.h>
-#include <gst/video/gstvideopool.h>
 #include <gst/video/video.h>
 
 #include "gstpmaudiovisualizer.h"
-#include <gst/gl/gstglmemory.h>
 #include <gst/pbutils/pbutils-enumtypes.h>
 
 GST_DEBUG_CATEGORY_STATIC(pm_audio_visualizer_debug);
@@ -249,6 +245,8 @@ static void gst_pm_audio_visualizer_init(GstPMAudioVisualizer *scope,
 
   scope->priv->adapter = gst_adapter_new();
   scope->priv->inbuf = gst_buffer_new();
+  scope->stream_time = 0;
+  scope->running_time = 0;
 
   /* properties */
 
@@ -370,10 +368,13 @@ static gboolean gst_pm_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
   if (klass->setup && !klass->setup(scope))
     goto setup_failed;
 
-  GST_DEBUG_OBJECT(scope, "video: dimension %dx%d, framerate %d/%d",
+  GST_INFO_OBJECT(scope, "video: dimension %dx%d, framerate %d/%d",
                    GST_VIDEO_INFO_WIDTH(&info), GST_VIDEO_INFO_HEIGHT(&info),
                    GST_VIDEO_INFO_FPS_N(&info), GST_VIDEO_INFO_FPS_D(&info));
-  GST_DEBUG_OBJECT(scope, "blocks: spf %u, req_spf %u", scope->priv->spf,
+  GST_INFO_OBJECT(scope, "audio: rate %d, channels: %d, bpf: %d",
+                   GST_AUDIO_INFO_RATE(&scope->ainfo), GST_AUDIO_INFO_CHANNELS(&scope->ainfo),
+                   GST_AUDIO_INFO_BPF(&scope->ainfo));
+  GST_INFO_OBJECT(scope, "blocks: spf %u, req_spf %u", scope->priv->spf,
                    scope->req_spf);
 
   gst_pad_set_caps(scope->priv->srcpad, caps);
@@ -695,6 +696,8 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
       }
     }
 
+    scope->stream_time = gst_segment_to_stream_time(&scope->priv->segment,
+                                                 GST_FORMAT_TIME, ts);
     ++scope->priv->processed;
 
     g_mutex_unlock(&scope->priv->config_lock);
@@ -747,11 +750,16 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     GST_LOG_OBJECT(scope, "avail: %u, bpf: %u", avail, sbpf);
     /* we want to take less or more, depending on spf : req_spf */
     if (avail - sbpf >= sbpf) {
+      // more than one frame available
       gst_adapter_flush(scope->priv->adapter, sbpf);
       gst_adapter_unmap(scope->priv->adapter);
     } else if (avail >= sbpf) {
       /* just flush a bit and stop */
-      gst_adapter_flush(scope->priv->adapter, (avail - sbpf));
+      // todo: this messes with the length and timing when using offline rendering. seems like a bug in the original code
+      //gst_adapter_flush(scope->priv->adapter, (avail - sbpf));
+
+      // instead just take one frame and stop
+      gst_adapter_flush(scope->priv->adapter, sbpf);
       gst_adapter_unmap(scope->priv->adapter);
       break;
     }

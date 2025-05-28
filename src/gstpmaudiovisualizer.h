@@ -67,8 +67,11 @@ struct _GstPMAudioVisualizer {
   /* audio state */
   GstAudioInfo ainfo;
 
-  /* current pts running time for syncing renderers */
+  /* current pts running time for syncing pipeline */
   guint64 running_time;
+
+  /* current time position within the input stream. may be the best choice for syncing renderers */
+  guint64 stream_time;
 
   /*< private >*/
   gpointer _padding[GST_PADDING];

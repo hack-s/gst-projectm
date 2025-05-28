@@ -52,7 +52,6 @@ static GstBuffer *wrap_gl_texture(GstGLBaseAudioVisualizer *glav,
   buffer = gst_buffer_new();
   if (!buffer) {
     g_error("Failed to create new buffer\n");
-    return NULL;
   }
 
   wrapped[0] = (gpointer)plugin->priv->texture_id;
@@ -63,7 +62,6 @@ static GstBuffer *wrap_gl_texture(GstGLBaseAudioVisualizer *glav,
       allocator, buffer, plugin->priv->allocation_params, formats, wrapped, 1);
   if (!ret) {
     g_error("Failed to setup gl memory\n");
-    return NULL;
   }
 
   gst_object_unref(allocator);
@@ -77,7 +75,7 @@ gst_projectm_prepare_output_buffer(GstGLBaseAudioVisualizer *scope,
   GstProjectM *plugin = GST_PROJECTM(scope);
 
   *outbuf = wrap_gl_texture(scope, plugin);
-  GST_INFO_OBJECT(plugin, "Wrapped RT texture buffer");
+  GST_DEBUG_OBJECT(plugin, "Wrapped RT texture buffer");
   return GST_FLOW_OK;
 }
 
@@ -341,13 +339,15 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
 static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
   GstProjectM *plugin = GST_PROJECTM(stuff);
   GstGLBaseAudioVisualizer *gstav = GST_GL_BASE_AUDIO_VISUALIZER(stuff);
-  GstPMAudioVisualizer *pmav = GST_PM_AUDIO_VISUALIZER(stuff);
+  GstPMAudioVisualizer *pmav = GST_PM_AUDIO_VISUALIZER(plugin);
 
   GstMapInfo audioMap;
   gboolean result = TRUE;
 
-  // get current gst (PTS) time and set projectM time
-  gdouble seconds_since_first_frame = (gdouble)pmav->running_time / GST_SECOND;
+  // get current gst stream time and set projectM time
+  // todo: PTS or stream time ?
+  gdouble seconds_since_first_frame = (double)pmav->stream_time / GST_SECOND;
+
   projectm_set_frame_time(plugin->priv->handle, seconds_since_first_frame);
 
   // AUDIO
