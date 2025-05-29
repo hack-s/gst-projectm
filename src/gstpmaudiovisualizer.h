@@ -47,9 +47,9 @@ G_BEGIN_DECLS
 #define GST_PM_AUDIO_VISUALIZER_GET_CLASS(obj)                                 \
   (G_TYPE_INSTANCE_GET_CLASS((obj), GST_TYPE_PM_AUDIO_VISUALIZER,              \
                              GstPMAudioVisualizerClass))
-#define GST_PM_IS_SYNAESTHESIA(obj)                                               \
+#define GST_PM_IS_SYNAESTHESIA(obj)                                            \
   (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_PM_AUDIO_VISUALIZER))
-#define GST_PM_IS_SYNAESTHESIA_CLASS(klass)                                       \
+#define GST_PM_IS_SYNAESTHESIA_CLASS(klass)                                    \
   (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_PM_AUDIO_VISUALIZER))
 typedef struct _GstPMAudioVisualizer GstPMAudioVisualizer;
 typedef struct _GstPMAudioVisualizerClass GstPMAudioVisualizerClass;
@@ -67,10 +67,7 @@ struct _GstPMAudioVisualizer {
   /* audio state */
   GstAudioInfo ainfo;
 
-  /* current pts running time for syncing pipeline */
-  guint64 running_time;
-
-  /* current time position within the input stream. may be the best choice for syncing renderers */
+  /* current time (ns) position within the input stream */
   guint64 stream_time;
 
   /*< private >*/

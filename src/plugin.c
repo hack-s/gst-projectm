@@ -42,31 +42,34 @@ G_DEFINE_TYPE_WITH_CODE(GstProjectM, gst_projectm,
 static GstBuffer *wrap_gl_texture(GstGLBaseAudioVisualizer *glav,
                                   GstProjectM *plugin) {
   GstGLMemoryAllocator *allocator;
-  gpointer wrapped[1];
-  GstGLFormat formats[1];
-  GstBuffer *buffer;
+  gpointer glTextures[1];
+  GstGLFormat glFormats[1];
+  GstBuffer *glBuffer;
   gboolean ret;
 
   allocator = gst_gl_memory_allocator_get_default(glav->context);
 
-  buffer = gst_buffer_new();
-  if (!buffer) {
+  glBuffer = gst_buffer_new();
+  if (!glBuffer) {
     g_error("Failed to create new buffer\n");
+    return NULL;
   }
 
-  wrapped[0] = (gpointer)plugin->priv->texture_id;
-  formats[0] = GST_GL_RGBA8;
+  glTextures[0] = (gpointer)plugin->priv->texture_id;
+  glFormats[0] = GST_GL_RGBA8;
 
-  // * Wrap the texture into GLMemory. *
-  ret = gst_gl_memory_setup_buffer(
-      allocator, buffer, plugin->priv->allocation_params, formats, wrapped, 1);
+  // create gl mem buffer for texture
+  ret = gst_gl_memory_setup_buffer(allocator, glBuffer,
+                                   plugin->priv->allocation_params, glFormats,
+                                   glTextures, 1);
   if (!ret) {
     g_error("Failed to setup gl memory\n");
+    return NULL;
   }
 
   gst_object_unref(allocator);
 
-  return buffer;
+  return glBuffer;
 }
 
 static GstFlowReturn
@@ -142,6 +145,8 @@ void gst_projectm_set_property(GObject *object, guint property_id,
   case PROP_SHUFFLE_PRESETS:
     plugin->shuffle_presets = g_value_get_boolean(value);
     break;
+  case PROP_PTS_SYNC:
+    plugin->pts_sync = g_value_get_boolean(value);
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
     break;
@@ -202,6 +207,9 @@ void gst_projectm_get_property(GObject *object, guint property_id,
   case PROP_SHUFFLE_PRESETS:
     g_value_set_boolean(value, plugin->shuffle_presets);
     break;
+  case PROP_PTS_SYNC:
+    g_value_set_boolean(value, plugin->pts_sync);
+    break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, property_id, pspec);
     break;
@@ -222,6 +230,7 @@ static void gst_projectm_init(GstProjectM *plugin) {
   plugin->preset_duration = DEFAULT_PRESET_DURATION;
   plugin->enable_playlist = DEFAULT_ENABLE_PLAYLIST;
   plugin->shuffle_presets = DEFAULT_SHUFFLE_PRESETS;
+  plugin->pts_sync = true;
 
   const gchar *meshSizeStr = DEFAULT_MESH_SIZE;
   gint width, height;
@@ -344,9 +353,15 @@ static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
   GstMapInfo audioMap;
   gboolean result = TRUE;
 
-  // get current gst stream time and set projectM time
-  // todo: PTS or stream time ?
-  gdouble seconds_since_first_frame = (double)pmav->stream_time / GST_SECOND;
+  // get current gst pts or stream time (dts) and set projectM time
+  gdouble seconds_since_first_frame;
+  if (plugin->pts_sync) {
+    // sync to pts
+    seconds_since_first_frame = (double)gstav->pts / GST_SECOND;
+  } else {
+    // sync to dts
+    seconds_since_first_frame = (double)pmav->stream_time / GST_SECOND;
+  }
 
   projectm_set_frame_time(plugin->priv->handle, seconds_since_first_frame);
 
@@ -549,6 +564,14 @@ static void gst_projectm_class_init(GstProjectMClass *klass) {
           "randomly selects presets from the playlist if presets are provided "
           "and not locked. Playlist must be enabled for this to take effect.",
           DEFAULT_SHUFFLE_PRESETS, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property(
+      gobject_class, PROP_PTS_SYNC,
+      g_param_spec_boolean(
+          "pts-sync", "Presentation Timestamp Sync",
+          "If true, projectM will be synced to the gst presentation timestamp. "
+          "In case of false, the stream time (dts) will be used.",
+          DEFAULT_PTS_SYNC, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   gobject_class->finalize = gst_projectm_finalize;
 

@@ -77,6 +77,9 @@ struct _GstGLBaseAudioVisualizer {
   GstGLDisplay *display;
   GstGLContext *context;
 
+  /* current buffer presentation timestamp */
+  guint64 pts;
+
   /*< private >*/
   gpointer _padding[GST_PADDING];
 
@@ -95,7 +98,7 @@ struct _GstGLBaseAudioVisualizer {
  * The base class for OpenGL based audio visualizers.
  * Extends GstPMAudioVisualizer to add GL rendering callbacks.
  * Handles GL context and render buffers.
-*/
+ */
 struct _GstGLBaseAudioVisualizerClass {
   GstPMAudioVisualizerClass parent_class;
 

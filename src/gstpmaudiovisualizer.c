@@ -246,7 +246,6 @@ static void gst_pm_audio_visualizer_init(GstPMAudioVisualizer *scope,
   scope->priv->adapter = gst_adapter_new();
   scope->priv->inbuf = gst_buffer_new();
   scope->stream_time = 0;
-  scope->running_time = 0;
 
   /* properties */
 
@@ -369,13 +368,14 @@ static gboolean gst_pm_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
     goto setup_failed;
 
   GST_INFO_OBJECT(scope, "video: dimension %dx%d, framerate %d/%d",
-                   GST_VIDEO_INFO_WIDTH(&info), GST_VIDEO_INFO_HEIGHT(&info),
-                   GST_VIDEO_INFO_FPS_N(&info), GST_VIDEO_INFO_FPS_D(&info));
+                  GST_VIDEO_INFO_WIDTH(&info), GST_VIDEO_INFO_HEIGHT(&info),
+                  GST_VIDEO_INFO_FPS_N(&info), GST_VIDEO_INFO_FPS_D(&info));
   GST_INFO_OBJECT(scope, "audio: rate %d, channels: %d, bpf: %d",
-                   GST_AUDIO_INFO_RATE(&scope->ainfo), GST_AUDIO_INFO_CHANNELS(&scope->ainfo),
-                   GST_AUDIO_INFO_BPF(&scope->ainfo));
+                  GST_AUDIO_INFO_RATE(&scope->ainfo),
+                  GST_AUDIO_INFO_CHANNELS(&scope->ainfo),
+                  GST_AUDIO_INFO_BPF(&scope->ainfo));
   GST_INFO_OBJECT(scope, "blocks: spf %u, req_spf %u", scope->priv->spf,
-                   scope->req_spf);
+                  scope->req_spf);
 
   gst_pad_set_caps(scope->priv->srcpad, caps);
 
@@ -660,11 +660,12 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
       GstClockTime earliest_time;
       gdouble proportion;
       guint64 qostime;
+      guint64 running_time;
 
-      scope->running_time = gst_segment_to_running_time(&scope->priv->segment,
-                                                        GST_FORMAT_TIME, ts);
+      running_time = gst_segment_to_running_time(&scope->priv->segment,
+                                                 GST_FORMAT_TIME, ts);
 
-      qostime = scope->running_time + scope->priv->frame_duration;
+      qostime = running_time + scope->priv->frame_duration;
 
       GST_OBJECT_LOCK(scope);
       earliest_time = scope->priv->earliest_time;
@@ -696,8 +697,8 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
       }
     }
 
-    scope->stream_time = gst_segment_to_stream_time(&scope->priv->segment,
-                                                 GST_FORMAT_TIME, ts);
+    scope->stream_time =
+        gst_segment_to_stream_time(&scope->priv->segment, GST_FORMAT_TIME, ts);
     ++scope->priv->processed;
 
     g_mutex_unlock(&scope->priv->config_lock);
@@ -755,8 +756,9 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
       gst_adapter_unmap(scope->priv->adapter);
     } else if (avail >= sbpf) {
       /* just flush a bit and stop */
-      // todo: this messes with the length and timing when using offline rendering. seems like a bug in the original code
-      //gst_adapter_flush(scope->priv->adapter, (avail - sbpf));
+      // todo: this messes with the length and timing when using offline
+      // rendering. seems like a bug in the original code
+      // gst_adapter_flush(scope->priv->adapter, (avail - sbpf));
 
       // instead just take one frame and stop
       gst_adapter_flush(scope->priv->adapter, sbpf);

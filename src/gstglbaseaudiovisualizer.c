@@ -178,6 +178,7 @@ static void gst_gl_base_audio_visualizer_init(GstGLBaseAudioVisualizer *glav) {
   glav->priv->in_audio = NULL;
   glav->priv->out_tex = NULL;
   glav->context = NULL;
+  glav->pts = 0;
   glav->priv->timestamp_offset = 0;
   g_rec_mutex_init(&glav->priv->context_lock);
   gst_gl_base_audio_visualizer_start(glav);
@@ -358,6 +359,7 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
 
   GstBuffer *buffer = video->buffer;
 
+  glav->pts = GST_BUFFER_PTS(buffer);
   glav->priv->in_audio = audio;
 
   gst_gl_context_thread_add(glav->context, (GstGLContextThreadFunc)_fill_gl,

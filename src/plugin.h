@@ -36,6 +36,7 @@ struct _GstProjectM {
   gboolean preset_locked;
   gboolean enable_playlist;
   gboolean shuffle_presets;
+  gboolean pts_sync;
 
   GstProjectMPrivate *priv;
 };
