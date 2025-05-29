@@ -25,6 +25,9 @@ GST_DEBUG_CATEGORY_STATIC(gst_projectm_debug);
 struct _GstProjectMPrivate {
   projectm_handle handle;
 
+  GstClockTime first_frame_time;
+  gboolean first_frame_received;
+
   GstGLFramebuffer *fbo;
   GLuint texture_id;
   GstBuffer *in_audio;
@@ -231,6 +234,8 @@ static void gst_projectm_init(GstProjectM *plugin) {
   plugin->enable_playlist = DEFAULT_ENABLE_PLAYLIST;
   plugin->shuffle_presets = DEFAULT_SHUFFLE_PRESETS;
   plugin->pts_sync = true;
+  plugin->priv->first_frame_time = 0;
+  plugin->priv->first_frame_received = FALSE;
 
   const gchar *meshSizeStr = DEFAULT_MESH_SIZE;
   gint width, height;
@@ -326,6 +331,7 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
   if (!plugin->priv->handle) {
     // Create ProjectM instance
     plugin->priv->handle = projectm_init(plugin);
+    plugin->priv->first_frame_received = FALSE;
     if (!plugin->priv->handle) {
       GST_ERROR_OBJECT(plugin, "ProjectM could not be initialized");
       return FALSE;
@@ -345,24 +351,44 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
   return TRUE;
 }
 
+static gdouble get_seconds_since_first_frame(GstProjectM *plugin, GstGLBaseAudioVisualizer *gstav)
+{
+  // pick timestamp to sync to
+  GstClockTime current_time;
+  if (plugin->pts_sync) {
+    // sync to pts
+    current_time = gstav->pts;
+  } else {
+    // sync to dts
+    GstPMAudioVisualizer *pmav = GST_PM_AUDIO_VISUALIZER(plugin);
+    current_time = pmav->stream_time;
+  }
+
+  if (!plugin->priv->first_frame_received) {
+    // Store the timestamp of the first frame
+    plugin->priv->first_frame_time = current_time;
+    plugin->priv->first_frame_received = TRUE;
+    return 0.0;
+  }
+
+  // Calculate elapsed time
+  GstClockTime elapsed_time = current_time - plugin->priv->first_frame_time;
+
+  // Convert to fractional seconds
+  gdouble elapsed_seconds = (gdouble) elapsed_time / GST_SECOND;
+
+  return elapsed_seconds;
+}
+
 static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
   GstProjectM *plugin = GST_PROJECTM(stuff);
   GstGLBaseAudioVisualizer *gstav = GST_GL_BASE_AUDIO_VISUALIZER(stuff);
-  GstPMAudioVisualizer *pmav = GST_PM_AUDIO_VISUALIZER(plugin);
 
   GstMapInfo audioMap;
   gboolean result = TRUE;
 
   // get current gst pts or stream time (dts) and set projectM time
-  gdouble seconds_since_first_frame;
-  if (plugin->pts_sync) {
-    // sync to pts
-    seconds_since_first_frame = (double)gstav->pts / GST_SECOND;
-  } else {
-    // sync to dts
-    seconds_since_first_frame = (double)pmav->stream_time / GST_SECOND;
-  }
-
+  gdouble seconds_since_first_frame = get_seconds_since_first_frame(plugin, gstav);
   projectm_set_frame_time(plugin->priv->handle, seconds_since_first_frame);
 
   // AUDIO
