@@ -351,8 +351,8 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
   return TRUE;
 }
 
-static gdouble get_seconds_since_first_frame(GstProjectM *plugin, GstGLBaseAudioVisualizer *gstav)
-{
+static gdouble get_seconds_since_first_frame(GstProjectM *plugin,
+                                             GstGLBaseAudioVisualizer *gstav) {
   // pick timestamp to sync to
   GstClockTime current_time;
   if (plugin->pts_sync) {
@@ -375,7 +375,7 @@ static gdouble get_seconds_since_first_frame(GstProjectM *plugin, GstGLBaseAudio
   GstClockTime elapsed_time = current_time - plugin->priv->first_frame_time;
 
   // Convert to fractional seconds
-  gdouble elapsed_seconds = (gdouble) elapsed_time / GST_SECOND;
+  gdouble elapsed_seconds = (gdouble)elapsed_time / GST_SECOND;
 
   return elapsed_seconds;
 }
@@ -388,7 +388,9 @@ static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
   gboolean result = TRUE;
 
   // get current gst pts or stream time (dts) and set projectM time
-  gdouble seconds_since_first_frame = get_seconds_since_first_frame(plugin, gstav);
+  gdouble seconds_since_first_frame =
+      get_seconds_since_first_frame(plugin, gstav);
+
   projectm_set_frame_time(plugin->priv->handle, seconds_since_first_frame);
 
   // AUDIO
