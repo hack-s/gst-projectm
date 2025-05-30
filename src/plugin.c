@@ -348,6 +348,22 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
 }
 
 static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
+
+  GstPMAudioVisualizer *gstav = GST_PM_AUDIO_VISUALIZER(glav);
+
+  // Log audio info
+  GST_DEBUG_OBJECT(
+      glav, "Audio Information <Channels: %d, SampleRate: %d, Description: %s>",
+      gstav->ainfo.channels, gstav->ainfo.rate,
+      gstav->ainfo.finfo->description);
+
+  // Log video info
+  GST_DEBUG_OBJECT(
+      glav,
+      "Video Information <Dimensions: %dx%d, FPS: %d/%d, SamplesPerFrame: %d>",
+      GST_VIDEO_INFO_WIDTH(&gstav->vinfo), GST_VIDEO_INFO_HEIGHT(&gstav->vinfo),
+      gstav->vinfo.fps_n, gstav->vinfo.fps_d, gstav->req_spf);
+
   return TRUE;
 }
 

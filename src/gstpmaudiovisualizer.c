@@ -42,17 +42,17 @@
  *
  * The code has been modified to improve compatibility with projectM and OpenGL.
  *
- * - Adds apis for implementer-provided memory allocation and video output
- * buffer mapping. Useful for directly mapping GL memory.
+ * - New apis for implementer-provided memory allocation and video frame
+ * buffer mapping. Useful for mapping video frames directly to gl memory.
  *
  * - Expose the stream time (dts) state.
  *
- * - Main memory buffers have been removed.
+ * - Main memory based video frame buffers have been removed.
  *
  * - Cpu based transition shaders have been removed.
  *
- * - Bugfix for the amount of bytes that are flushed for a single frame from
- * audio buffers.
+ * - Bugfix for the amount of bytes being flushed for a single video frame from
+ * the audio input buffer.
  */
 
 #ifdef HAVE_CONFIG_H
