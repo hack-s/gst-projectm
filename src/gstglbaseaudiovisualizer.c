@@ -104,7 +104,8 @@ static GstStateChangeReturn
 gst_gl_base_audio_visualizer_change_state(GstElement *element,
                                           GstStateChange transition);
 
-/* renders a video frame using gl, impl for parent class GstPMAudioVisualizerClass. */
+/* renders a video frame using gl, impl for parent class
+ * GstPMAudioVisualizerClass. */
 static gboolean gst_gl_base_audio_visualizer_parent_render(
     GstPMAudioVisualizer *bscope, GstBuffer *audio, GstVideoFrame *video);
 
