@@ -352,12 +352,12 @@ static gboolean gst_projectm_setup(GstGLBaseAudioVisualizer *glav) {
 }
 
 static gdouble get_seconds_since_first_frame(GstProjectM *plugin,
-                                             GstGLBaseAudioVisualizer *gstav) {
+                                             GstGLBaseAudioVisualizer *glav) {
   // pick timestamp to sync to
   GstClockTime current_time;
   if (plugin->pts_sync) {
     // sync to pts
-    current_time = gstav->pts;
+    current_time = glav->pts;
   } else {
     // sync to dts
     GstPMAudioVisualizer *pmav = GST_PM_AUDIO_VISUALIZER(plugin);
@@ -382,14 +382,14 @@ static gdouble get_seconds_since_first_frame(GstProjectM *plugin,
 
 static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
   GstProjectM *plugin = GST_PROJECTM(stuff);
-  GstGLBaseAudioVisualizer *gstav = GST_GL_BASE_AUDIO_VISUALIZER(stuff);
+  GstGLBaseAudioVisualizer *glav = GST_GL_BASE_AUDIO_VISUALIZER(stuff);
 
   GstMapInfo audioMap;
   gboolean result = TRUE;
 
-  // get current gst pts or stream time (dts) and set projectM time
+  // get current gst sync time (pts or stream time/dts) and set projectM time
   gdouble seconds_since_first_frame =
-      get_seconds_since_first_frame(plugin, gstav);
+      get_seconds_since_first_frame(plugin, glav);
 
   projectm_set_frame_time(plugin->priv->handle, seconds_since_first_frame);
 
@@ -414,7 +414,7 @@ static gboolean gst_projectm_fill_gl_memory_callback(gpointer stuff) {
   projectm_opengl_render_frame_fbo(plugin->priv->handle,
                                    plugin->priv->fbo->fbo_id);
 
-  gl_error_handler(gstav->context, plugin);
+  gl_error_handler(glav->context, plugin);
 
   gst_buffer_unmap(plugin->priv->in_audio, &audioMap);
 

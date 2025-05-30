@@ -35,13 +35,24 @@
 
 /*
  * The code in this file is based on
- * GStreamer / gst-plugins-base / 1.19.2:
+ * GStreamer / gst-plugins-base / 1.19.2, latest version as of 2025/05/29.
  * gst-libs/gst/pbutils/gstaudiovisualizer.h Git Repository:
  * https://github.com/GStreamer/gst-plugins-base/blob/master/gst-libs/gst/pbutils/gstaudiovisualizer.h
  * Original copyright notice has been retained at the top of this file.
  *
- * The code has been modified to map gl memory for the video output buffer and
- * expose pts running_time. Support for CPU based shaders has been removed.
+ * The code has been modified to improve compatibility with projectM and OpenGL.
+ *
+ * - Adds apis for implementer-provided memory allocation and video output
+ * buffer mapping. Useful for directly mapping GL memory.
+ *
+ * - Expose the stream time (dts) state.
+ *
+ * - Main memory buffers have been removed.
+ *
+ * - Cpu based transition shaders have been removed.
+ *
+ * - Bugfix for the amount of bytes that are flushed for a single frame from
+ * audio buffers.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -634,6 +645,7 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
   g_mutex_lock(&scope->priv->config_lock);
 
   /* this is what we want */
+  /* number of audio bytes to process for one video frame */
   /* samples per video frame * audio bytes per frame for both channels */
   sbpf = scope->req_spf * bpf;
 
@@ -697,8 +709,10 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
       }
     }
 
+    // get stream time for others interested in timing information
     scope->stream_time =
         gst_segment_to_stream_time(&scope->priv->segment, GST_FORMAT_TIME, ts);
+
     ++scope->priv->processed;
 
     g_mutex_unlock(&scope->priv->config_lock);
@@ -751,16 +765,18 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     GST_LOG_OBJECT(scope, "avail: %u, bpf: %u", avail, sbpf);
     /* we want to take less or more, depending on spf : req_spf */
     if (avail - sbpf >= sbpf) {
-      // more than one frame available
+      // enough audio data for more frames is available
       gst_adapter_flush(scope->priv->adapter, sbpf);
       gst_adapter_unmap(scope->priv->adapter);
     } else if (avail >= sbpf) {
+      // was just enough audio data for one frame
       /* just flush a bit and stop */
       // todo: this messes with the length and timing when using offline
       // rendering. seems like a bug in the original code
       // gst_adapter_flush(scope->priv->adapter, (avail - sbpf));
 
-      // instead just take one frame and stop
+      // instead just flush one video frame worth of audio data from the buffer
+      // and stop
       gst_adapter_flush(scope->priv->adapter, sbpf);
       gst_adapter_unmap(scope->priv->adapter);
       break;

@@ -50,8 +50,9 @@
  * #GstGLBaseAudioVisualizer handles the nitty gritty details of retrieving an
  * OpenGL context. It also provides `gl_start()` and `gl_stop()` virtual methods
  * that ensure an OpenGL context is available and current in the calling thread
- * for initializing and cleaning up OpenGL dependent resources. The `gl_render`
- * virtual method is used to perform OpenGL rendering.
+ * for initializing and cleaning up OpenGL dependent resources. The `render`
+ * virtual method of the GstPMAudioVisualizer is implemented to perform OpenGL
+ * rendering. fill_gl_memory is called to render directly to gl memory.
  */
 
 #define GST_CAT_DEFAULT gst_gl_base_audio_visualizer_debug
@@ -95,42 +96,69 @@ static void gst_gl_base_audio_visualizer_get_property(GObject *object,
                                                       GValue *value,
                                                       GParamSpec *pspec);
 
+/* discover gl context / display from gst */
 static void gst_gl_base_audio_visualizer_set_context(GstElement *element,
                                                      GstContext *context);
+/* handle pipeline state changes */
 static GstStateChangeReturn
 gst_gl_base_audio_visualizer_change_state(GstElement *element,
                                           GstStateChange transition);
 
-static gboolean
-gst_gl_base_audio_visualizer_render(GstPMAudioVisualizer *bscope,
-                                    GstBuffer *audio, GstVideoFrame *video);
-static void gst_gl_base_audio_visualizer_start(GstGLBaseAudioVisualizer *glav);
-static void gst_gl_base_audio_visualizer_stop(GstGLBaseAudioVisualizer *glav);
-static gboolean
-gst_gl_base_audio_visualizer_decide_allocation(GstPMAudioVisualizer *gstav,
-                                               GstQuery *query);
+/* render a video frame frame */
+static gboolean gst_gl_base_audio_visualizer_parent_render(
+    GstPMAudioVisualizer *bscope, GstBuffer *audio, GstVideoFrame *video);
 
+/* internal utility for resetting state on start */
+static void gst_gl_base_audio_visualizer_start(GstGLBaseAudioVisualizer *glav);
+
+/* internal utility for cleaning up gl context on stop */
+static void gst_gl_base_audio_visualizer_stop(GstGLBaseAudioVisualizer *glav);
+
+/* gl memory pool allocation impl for parent class GstPMAudioVisualizerClass  */
+static gboolean gst_gl_base_audio_visualizer_parent_decide_allocation(
+    GstPMAudioVisualizer *gstav, GstQuery *query);
+
+/* called when format changes, default v-impl for this class. can be overwritten
+ * by implementer. */
 static gboolean
 gst_gl_base_audio_visualizer_default_setup(GstGLBaseAudioVisualizer *glav);
+
+/* gl context is started, default v-impl for this class. can be overwritten
+ * by implementer. */
 static gboolean
 gst_gl_base_audio_visualizer_default_gl_start(GstGLBaseAudioVisualizer *glav);
+
+/* gl context is shutting down, default v-impl for this class. can be
+ * overwritten by implementer. */
 static void
 gst_gl_base_audio_visualizer_default_gl_stop(GstGLBaseAudioVisualizer *glav);
+
+/* default empty v-impl for rendering a frame. can be overwritten by
+ * implementer. */
 static gboolean gst_gl_base_audio_visualizer_default_fill_gl_memory(
     GstGLBaseAudioVisualizer *glav, GstBuffer *in_audio, GstGLMemory *mem);
 
+/* find a valid gl context. lock must have already been acquired. */
 static gboolean gst_gl_base_audio_visualizer_find_gl_context_unlocked(
     GstGLBaseAudioVisualizer *glav);
 
-static gboolean gst_gl_base_audio_visualizer_setup(GstPMAudioVisualizer *gstav);
+/* called whenever the format changes, impl for parent class
+ * GstPMAudioVisualizerClass */
+static gboolean
+gst_gl_base_audio_visualizer_parent_setup(GstPMAudioVisualizer *gstav);
 
+/* output buffer allocation default v-impl for this class. can be overwritten by
+ * implementer. */
 static GstFlowReturn gst_gl_base_audio_visualizer_default_prepare_output_buffer(
     GstGLBaseAudioVisualizer *scope, GstBuffer **outbuf);
 
+/* output buffer allocation impl for parent class GstPMAudioVisualizerClass */
 static GstFlowReturn gst_gl_base_audio_visualizer_parent_prepare_output_buffer(
     GstPMAudioVisualizer *scope, GstBuffer **outbuf);
 
-static void gst_gl_base_audio_visualizer_map_output_buffer(
+/* map output video frame to buffer outbuf with gl flags, impl for parent class
+ * GstPMAudioVisualizerClass */
+static void gst_gl_base_audio_visualizer_parent_map_output_buffer(
     GstPMAudioVisualizer *scope, GstVideoFrame *outframe, GstBuffer *outbuf);
 
 static void
@@ -150,23 +178,33 @@ gst_gl_base_audio_visualizer_class_init(GstGLBaseAudioVisualizerClass *klass) {
       GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_change_state);
 
   gstav_class->decide_allocation =
-      GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_decide_allocation);
-  gstav_class->setup = GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_setup);
+      GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_parent_decide_allocation);
 
-  gstav_class->render = GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_render);
+  gstav_class->setup =
+      GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_parent_setup);
+
+  gstav_class->render =
+      GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_parent_render);
+
   gstav_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(
       gst_gl_base_audio_visualizer_parent_prepare_output_buffer);
+
   gstav_class->map_output_buffer =
-      GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_map_output_buffer);
+      GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_parent_map_output_buffer);
 
   klass->supported_gl_api = GST_GL_API_ANY;
+
   klass->gl_start =
       GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_default_gl_start);
+
   klass->gl_stop =
       GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_default_gl_stop);
+
   klass->setup = GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_default_setup);
+
   klass->fill_gl_memory =
       GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_default_fill_gl_memory);
+
   klass->prepare_output_buffer = GST_DEBUG_FUNCPTR(
       gst_gl_base_audio_visualizer_default_prepare_output_buffer);
 }
@@ -315,7 +353,7 @@ static GstFlowReturn gst_gl_base_audio_visualizer_parent_prepare_output_buffer(
   return klass->prepare_output_buffer(glav, outbuf);
 }
 
-static void gst_gl_base_audio_visualizer_map_output_buffer(
+static void gst_gl_base_audio_visualizer_parent_map_output_buffer(
     GstPMAudioVisualizer *scope, GstVideoFrame *outframe, GstBuffer *outbuf) {
   /* map video to gl memory */
   gst_video_frame_map(outframe, &scope->vinfo, outbuf,
@@ -362,6 +400,7 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
   glav->pts = GST_BUFFER_PTS(buffer);
   glav->priv->in_audio = audio;
 
+  // dispatch _fill_gl to the gl thread
   gst_gl_context_thread_add(glav->context, (GstGLContextThreadFunc)_fill_gl,
                             glav);
 
@@ -418,7 +457,7 @@ eos: {
 }
 
 static gboolean
-gst_gl_base_audio_visualizer_setup(GstPMAudioVisualizer *gstav) {
+gst_gl_base_audio_visualizer_parent_setup(GstPMAudioVisualizer *gstav) {
   GstGLBaseAudioVisualizer *glav = GST_GL_BASE_AUDIO_VISUALIZER(gstav);
   GstGLBaseAudioVisualizerClass *glav_class =
       GST_GL_BASE_AUDIO_VISUALIZER_GET_CLASS(gstav);
@@ -428,9 +467,8 @@ gst_gl_base_audio_visualizer_setup(GstPMAudioVisualizer *gstav) {
   return glav_class->setup(glav);
 }
 
-static gboolean
-gst_gl_base_audio_visualizer_render(GstPMAudioVisualizer *bscope,
-                                    GstBuffer *audio, GstVideoFrame *video) {
+static gboolean gst_gl_base_audio_visualizer_parent_render(
+    GstPMAudioVisualizer *bscope, GstBuffer *audio, GstVideoFrame *video) {
   GstGLBaseAudioVisualizer *glav = GST_GL_BASE_AUDIO_VISUALIZER(bscope);
 
   gst_gl_base_audio_visualizer_fill(bscope, glav, audio, video);
@@ -593,9 +631,8 @@ error: {
 }
 }
 
-static gboolean
-gst_gl_base_audio_visualizer_decide_allocation(GstPMAudioVisualizer *gstav,
-                                               GstQuery *query) {
+static gboolean gst_gl_base_audio_visualizer_parent_decide_allocation(
+    GstPMAudioVisualizer *gstav, GstQuery *query) {
   GstGLBaseAudioVisualizer *glav = GST_GL_BASE_AUDIO_VISUALIZER(gstav);
   GstGLContext *context;
   GstBufferPool *pool = NULL;
