@@ -42,7 +42,7 @@ struct _GstProjectM {
 };
 
 struct _GstProjectMClass {
-  GstPMAudioVisualizerClass parent_class;
+  GstGLBaseAudioVisualizerClass parent_class;
 };
 
 static void gst_projectm_set_property(GObject *object, guint prop_id,

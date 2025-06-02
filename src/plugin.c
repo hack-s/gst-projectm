@@ -307,20 +307,24 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
   }
 #endif
 
-  glGenTextures(1, &plugin->priv->texture_id);
-  glBindTexture(GL_TEXTURE_2D, plugin->priv->texture_id);
+  // initialize render texture
+  // todo: let gst create the texture
+  const GstGLFuncs *glFunctions = glav->context->gl_vtable;
+
+  glFunctions->GenTextures(1, &plugin->priv->texture_id);
+  glFunctions->BindTexture(GL_TEXTURE_2D, plugin->priv->texture_id);
 
   // allocate texture
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
+  glFunctions->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
                GST_VIDEO_INFO_HEIGHT(&gstav->vinfo), 0, GL_RGBA,
                GL_UNSIGNED_BYTE, NULL);
 
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glFunctions->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glFunctions->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glFunctions->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glFunctions->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   // glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-  glBindTexture(GL_TEXTURE_2D, 0);
+  glFunctions->BindTexture(GL_TEXTURE_2D, 0);
 
   plugin->priv->allocation_params =
       gst_gl_video_allocation_params_new_wrapped_texture(
