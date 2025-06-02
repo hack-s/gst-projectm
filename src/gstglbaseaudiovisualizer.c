@@ -392,19 +392,21 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
                  glav->priv->n_frames == 1))
     goto eos;
 
+  GstBuffer *buffer = video->buffer;
+
+  // the following vars are params for passing values to _fill_gl()
   // video is mapped to gl memory
   glav->priv->out_tex = (GstGLMemory *)video->map[0].memory;
   glav->priv->in_audio = audio;
 
-  GstBuffer *buffer = video->buffer;
-
+  // make current presentation timestamp accessible before rendering
   glav->pts = GST_BUFFER_PTS(buffer);
-  glav->priv->in_audio = audio;
 
-  // dispatch _fill_gl to the gl thread
+  // dispatch _fill_gl to the gl thread, blocking call
   gst_gl_context_thread_add(glav->context, (GstGLContextThreadFunc)_fill_gl,
                             glav);
 
+  // clear param refs, these pointers never owned the data
   glav->priv->out_tex = NULL;
   glav->priv->in_audio = NULL;
 

@@ -104,9 +104,9 @@ struct _GstGLBaseAudioVisualizerClass {
 
   /*< public >*/
   GstGLAPI supported_gl_api;
-  /* called when gl context starts */
+  /* called once the gl context can be used for initializing gl resources */
   gboolean (*gl_start)(GstGLBaseAudioVisualizer *glav);
-  /* called when gl context stops */
+  /* called when gl context is being closed and gl resources need to be cleaned up */
   void (*gl_stop)(GstGLBaseAudioVisualizer *glav);
   /* called when caps have been set for the pipeline */
   gboolean (*setup)(GstGLBaseAudioVisualizer *glav);
