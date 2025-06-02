@@ -36,14 +36,15 @@
 /*
  * The code in this file is based on
  * GStreamer / gst-plugins-base / 1.19.2, latest version as of 2025/05/29.
- * gst-libs/gst/pbutils/gstaudiovisualizer.h Git Repository:
- * https://github.com/GStreamer/gst-plugins-base/blob/master/gst-libs/gst/pbutils/gstaudiovisualizer.h
+ * gst-libs/gst/pbutils/gstaudiovisualizer.c Git Repository:
+ * https://github.com/GStreamer/gst-plugins-base/blob/master/gst-libs/gst/pbutils/gstaudiovisualizer.c
  * Original copyright notice has been retained at the top of this file.
  *
  * The code has been modified to improve compatibility with projectM and OpenGL.
  *
  * - New apis for implementer-provided memory allocation and video frame
- * buffer mapping. Useful for mapping video frames directly to gl memory.
+ * buffer mapping. Used by gl plugins for mapping video frames directly to gl
+ * memory.
  *
  * - Expose the stream time (dts) state.
  *
