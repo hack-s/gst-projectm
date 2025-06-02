@@ -124,13 +124,13 @@ static gboolean gst_gl_base_audio_visualizer_parent_decide_allocation(
 static gboolean
 gst_gl_base_audio_visualizer_default_setup(GstGLBaseAudioVisualizer *glav);
 
-/* gl context is started, default v-impl for this class. can be overwritten
- * by implementer. */
+/* gl context is started and usable. called from gl thread. default v-impl for
+ * this class, can be overwritten by implementer. */
 static gboolean
 gst_gl_base_audio_visualizer_default_gl_start(GstGLBaseAudioVisualizer *glav);
 
-/* gl context is shutting down, default v-impl for this class. can be
- * overwritten by implementer. */
+/* gl context is shutting down. called from gl thread. default v-impl for this
+ * class. can be overwritten by implementer. */
 static void
 gst_gl_base_audio_visualizer_default_gl_stop(GstGLBaseAudioVisualizer *glav);
 
