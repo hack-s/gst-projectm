@@ -55,6 +55,8 @@
  * - Bugfix for the amount of bytes being flushed for a single video frame from
  * the audio input buffer.
  *
+ * - Bugfix for accumulating qos frame drops while real-time rendering.
+ *
  *  Typical plug-in call order for implementer-provided functions:
  *  - decide_allocation (once)
  *  - setup (once)
