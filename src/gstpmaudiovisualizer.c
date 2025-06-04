@@ -828,8 +828,10 @@ static gboolean gst_pm_audio_visualizer_src_event(GstPad *pad,
     if (diff >= 0)
       /* we're late, this is a good estimate for next displayable
        * frame (see part-qos.txt) */
+      // original calc seems like a lot:  timestamp + diff * 2 + scope->priv->frame_duration;
+      // let's just continue where we are now
       scope->priv->earliest_time =
-          timestamp + 2 * diff + scope->priv->frame_duration;
+          timestamp + scope->priv->frame_duration;
     else
       scope->priv->earliest_time = timestamp + diff;
     GST_OBJECT_UNLOCK(scope);
