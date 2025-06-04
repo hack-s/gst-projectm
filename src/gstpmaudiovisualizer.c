@@ -157,6 +157,8 @@ struct _GstPMAudioVisualizerPrivate {
 
   /* QoS stuff */ /* with LOCK */
   gdouble proportion;
+  /* qos: earliest time to render the next frame, the render loop will skip
+   * frames until this time */
   GstClockTime earliest_time;
 
   guint dropped; /* frames dropped / not dropped */
@@ -830,10 +832,10 @@ static gboolean gst_pm_audio_visualizer_src_event(GstPad *pad,
     if (diff >= 0)
       /* we're late, this is a good estimate for next displayable
        * frame (see part-qos.txt) */
-      // original calc seems like a lot:  timestamp + diff * 2 + scope->priv->frame_duration;
+      // bugfix, original calc seems like a lot:
+      // timestamp + diff * 2 + scope->priv->frame_duration;
       // let's just continue where we are now
-      scope->priv->earliest_time =
-          timestamp + scope->priv->frame_duration;
+      scope->priv->earliest_time = timestamp + scope->priv->frame_duration;
     else
       scope->priv->earliest_time = timestamp + diff;
     GST_OBJECT_UNLOCK(scope);
