@@ -54,8 +54,14 @@
  *
  * - Bugfix for the amount of bytes being flushed for a single video frame from
  * the audio input buffer.
+ *
+ *  Typical plug-in call order for implementer-provided functions:
+ *  - decide_allocation (once)
+ *  - setup (once)
+ *  - prepare_output_buffer (once for each frame)
+ *  - map_output_buffer (once for each frame)
+ *  - render (once for each frame)
  */
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif

@@ -50,9 +50,16 @@
  * #GstGLBaseAudioVisualizer handles the nitty gritty details of retrieving an
  * OpenGL context. It also provides `gl_start()` and `gl_stop()` virtual methods
  * that ensure an OpenGL context is available and current in the calling thread
- * for initializing and cleaning up OpenGL dependent resources. The `render`
+ * for initializing and cleaning up OpenGL resources. The `render`
  * virtual method of the GstPMAudioVisualizer is implemented to perform OpenGL
- * rendering. fill_gl_memory is called to render directly to gl memory.
+ * rendering. The implementer provides an implementation for fill_gl_memory to
+ * render directly to gl memory.
+ *
+ * Typical plug-in call order for implementer-provided functions:
+ * - setup (once)
+ * - gl_start (once)
+ * - fill_gl_memory (once for each frame)
+ * - gl_stop (once)
  */
 
 #define GST_CAT_DEFAULT gst_gl_base_audio_visualizer_debug
@@ -119,23 +126,23 @@ static void gst_gl_base_audio_visualizer_stop(GstGLBaseAudioVisualizer *glav);
 static gboolean gst_gl_base_audio_visualizer_parent_decide_allocation(
     GstPMAudioVisualizer *gstav, GstQuery *query);
 
-/* called when format changes, default v-impl for this class. can be overwritten
- * by implementer. */
+/* called when format changes, default empty v-impl for this class. can be
+ * overwritten by implementer. */
 static gboolean
 gst_gl_base_audio_visualizer_default_setup(GstGLBaseAudioVisualizer *glav);
 
-/* gl context is started and usable. called from gl thread. default v-impl for
- * this class, can be overwritten by implementer. */
+/* gl context is started and usable. called from gl thread. default empty v-impl
+ * for this class, can be overwritten by implementer. */
 static gboolean
 gst_gl_base_audio_visualizer_default_gl_start(GstGLBaseAudioVisualizer *glav);
 
-/* gl context is shutting down. called from gl thread. default v-impl for this
- * class. can be overwritten by implementer. */
+/* gl context is shutting down. called from gl thread. default empty v-impl for
+ * this class. can be overwritten by implementer. */
 static void
 gst_gl_base_audio_visualizer_default_gl_stop(GstGLBaseAudioVisualizer *glav);
 
-/* default empty v-impl for rendering a frame. can be overwritten by
- * implementer. */
+/* default empty v-impl for rendering a frame. called from gl thread. can be
+ * overwritten by implementer. */
 static gboolean gst_gl_base_audio_visualizer_default_fill_gl_memory(
     GstGLBaseAudioVisualizer *glav, GstBuffer *in_audio, GstGLMemory *mem);
 
@@ -669,7 +676,7 @@ static gboolean gst_gl_base_audio_visualizer_parent_decide_allocation(
   }
 
   if (!pool || !GST_IS_GL_BUFFER_POOL(pool)) {
-    // can't use this pool
+    /* can't use this pool */
     if (pool)
       gst_object_unref(pool);
     pool = gst_gl_buffer_pool_new(context);
