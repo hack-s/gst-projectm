@@ -22,9 +22,9 @@
 
 /*
  * The code in this file is based on
- * GStreamer / gst-plugins-base / 1.19.2, latest version as of 2025/05/29.
+ * GStreamer / gst-plugins-base, latest version as of 2025/05/29.
  * gst-libs/gst/pbutils/gstaudiovisualizer.h Git Repository:
- * https://github.com/GStreamer/gst-plugins-base/blob/master/gst-libs/gst/pbutils/gstaudiovisualizer.h
+ * https://gitlab.freedesktop.org/gstreamer/gstreamer/-/blob/main/subprojects/gst-plugins-base/gst-libs/gst/pbutils/gstaudiovisualizer.h
  *
  * Original copyright notice has been retained at the top of this file.
  * The code has been modified to improve compatibility with projectM and OpenGL.

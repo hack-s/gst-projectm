@@ -35,9 +35,9 @@
 
 /*
  * The code in this file is based on
- * GStreamer / gst-plugins-base / 1.19.2, latest version as of 2025/05/29.
+ * GStreamer / gst-plugins-base, latest version as of 2025/05/29.
  * gst-libs/gst/pbutils/gstaudiovisualizer.c Git Repository:
- * https://github.com/GStreamer/gst-plugins-base/blob/master/gst-libs/gst/pbutils/gstaudiovisualizer.c
+ * https://gitlab.freedesktop.org/gstreamer/gstreamer/-/blob/main/subprojects/gst-plugins-base/gst-libs/gst/pbutils/gstaudiovisualizer.c
  * Original copyright notice has been retained at the top of this file.
  *
  * The code has been modified to improve compatibility with projectM and OpenGL.
@@ -55,7 +55,7 @@
  * - Bugfix for the amount of bytes being flushed for a single video frame from
  * the audio input buffer.
  *
- * - Bugfix for accumulating qos frame drops while real-time rendering.
+ * - Bugfix for long qos frame drops while real-time rendering.
  *
  *  Typical plug-in call order for implementer-provided functions:
  *  - decide_allocation (once)
@@ -619,10 +619,11 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
   GstFlowReturn ret = GST_FLOW_OK;
   GstPMAudioVisualizer *scope;
   GstPMAudioVisualizerClass *klass;
-  GstBuffer *inbuf;
   guint64 dist, ts;
   guint avail, sbpf;
-  gpointer adata;
+  // databuf is a buffer pointing to single video frame worth of audio data from the adapter
+  // inbuf is a buffer holding a copy of the current single video frame worth of audio data from the adapter to process
+  GstBuffer *databuf, *inbuf;
   gint bpf, rate;
 
   scope = GST_PM_AUDIO_VISUALIZER(parent);
@@ -682,13 +683,10 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     if (GST_CLOCK_TIME_IS_VALID(ts)) {
       GstClockTime earliest_time;
       gdouble proportion;
-      guint64 qostime;
-      guint64 running_time;
+      gint64 qostime;
 
-      running_time = gst_segment_to_running_time(&scope->priv->segment,
-                                                 GST_FORMAT_TIME, ts);
-
-      qostime = running_time + scope->priv->frame_duration;
+      qostime = gst_segment_to_running_time(&scope->priv->segment,
+                                                 GST_FORMAT_TIME, ts) + scope->priv->frame_duration;
 
       GST_OBJECT_LOCK(scope);
       earliest_time = scope->priv->earliest_time;
@@ -744,16 +742,16 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     GST_BUFFER_DURATION(outbuf) = scope->priv->frame_duration;
 
     /* this can fail as the data size we need could have changed */
-    if (!(adata = (gpointer)gst_adapter_map(scope->priv->adapter, sbpf)))
+    if (!(databuf = gst_adapter_get_buffer(scope->priv->adapter, sbpf)))
       break;
 
     /* allow customized memory to video frame mapping */
     klass->map_output_buffer(scope, &outframe, outbuf);
 
     /* place sbpf number of bytes of audio data into inbuf  */
-    gst_buffer_replace_all_memory(
-        inbuf, gst_memory_new_wrapped(GST_MEMORY_FLAG_READONLY, adata, sbpf, 0,
-                                      sbpf, NULL, NULL));
+    gst_buffer_remove_all_memory (inbuf);
+    gst_buffer_copy_into (inbuf, databuf, GST_BUFFER_COPY_MEMORY, 0, sbpf);
+    gst_buffer_unref (databuf);
 
     /* call class->render() vmethod */
     if (klass->render) {
@@ -777,8 +775,8 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     /* we want to take less or more, depending on spf : req_spf */
     if (avail - sbpf >= sbpf) {
       // enough audio data for more frames is available
-      gst_adapter_flush(scope->priv->adapter, sbpf);
       gst_adapter_unmap(scope->priv->adapter);
+      gst_adapter_flush(scope->priv->adapter, sbpf);
     } else if (avail >= sbpf) {
       // was just enough audio data for one frame
       /* just flush a bit and stop */
@@ -788,8 +786,8 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
 
       // instead just flush one video frame worth of audio data from the buffer
       // and stop
-      gst_adapter_flush(scope->priv->adapter, sbpf);
       gst_adapter_unmap(scope->priv->adapter);
+      gst_adapter_flush(scope->priv->adapter, sbpf);
       break;
     }
     avail = gst_adapter_available(scope->priv->adapter);
@@ -834,7 +832,8 @@ static gboolean gst_pm_audio_visualizer_src_event(GstPad *pad,
        * frame (see part-qos.txt) */
       // bugfix, original calc seems like a lot:
       // timestamp + diff * 2 + scope->priv->frame_duration;
-      // let's just continue where we are now
+      // a bugfix has been added since to limit drops to second: scope->priv->earliest_time = timestamp + MIN (2 * diff, GST_SECOND) + scope->priv->frame_duration;
+      // let's just continue with the next frame from where we are now
       scope->priv->earliest_time = timestamp + scope->priv->frame_duration;
     else
       scope->priv->earliest_time = timestamp + diff;
