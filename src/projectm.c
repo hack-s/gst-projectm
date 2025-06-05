@@ -43,7 +43,8 @@ projectm_handle projectm_init(GstProjectM *plugin) {
     // &ProjectMWrapper::PresetSwitchedEvent, static_cast<void*>(this));
   } else {
     GST_DEBUG_OBJECT(plugin, "Playlist disabled");
-  } // Log properties
+  }
+  // Log properties
   GST_INFO_OBJECT(
       plugin,
       "Using Properties: "
@@ -61,12 +62,13 @@ projectm_handle projectm_init(GstProjectM *plugin) {
       "preset-locked=%d, "
       "enable-playlist=%d, "
       "shuffle-presets=%d",
+      "pts-sync=%d",
       plugin->preset_path, plugin->texture_dir_path, plugin->beat_sensitivity,
       plugin->hard_cut_duration, plugin->hard_cut_enabled,
       plugin->hard_cut_sensitivity, plugin->soft_cut_duration,
       plugin->preset_duration, plugin->mesh_width, plugin->mesh_height,
       plugin->aspect_correction, plugin->easter_egg, plugin->preset_locked,
-      plugin->enable_playlist, plugin->shuffle_presets);
+      plugin->enable_playlist, plugin->shuffle_presets, plugin->pts_sync);
 
   // Load preset file if path is provided
   if (plugin->preset_path != NULL) {
