@@ -74,8 +74,6 @@ struct _GstPMAudioVisualizer {
   guint64 stream_time;
 
   /*< private >*/
-  gpointer _padding[GST_PADDING];
-
   GstPMAudioVisualizerPrivate *priv;
 };
 

@@ -78,9 +78,6 @@
 GST_DEBUG_CATEGORY_STATIC(pm_audio_visualizer_debug);
 #define GST_CAT_DEFAULT (pm_audio_visualizer_debug)
 
-#define DEFAULT_SHADER GST_AUDIO_VISUALIZER_SHADER_FADE
-#define DEFAULT_SHADE_AMOUNT 0x000a0a0a
-
 enum { PROP_0 };
 
 static GstBaseTransformClass *parent_class = NULL;
@@ -203,7 +200,7 @@ GType gst_pm_audio_visualizer_get_type(void) {
 }
 
 static inline GstPMAudioVisualizerPrivate *
-gst_audio_visualizer_get_instance_private(GstPMAudioVisualizer *self) {
+gst_pm_audio_visualizer_get_instance_private(GstPMAudioVisualizer *self) {
   return (G_STRUCT_MEMBER_P(self, private_offset));
 }
 
@@ -239,7 +236,7 @@ static void gst_pm_audio_visualizer_init(GstPMAudioVisualizer *scope,
                                          GstPMAudioVisualizerClass *g_class) {
   GstPadTemplate *pad_template;
 
-  scope->priv = gst_audio_visualizer_get_instance_private(scope);
+  scope->priv = gst_pm_audio_visualizer_get_instance_private(scope);
 
   /* create the sink and src pads */
   pad_template =
@@ -324,7 +321,7 @@ static void gst_pm_audio_visualizer_dispose(GObject *object) {
   G_OBJECT_CLASS(parent_class)->dispose(object);
 }
 
-static void gst_audio_visualizer_reset(GstPMAudioVisualizer *scope) {
+static void gst_pm_audio_visualizer_reset(GstPMAudioVisualizer *scope) {
   gst_adapter_clear(scope->priv->adapter);
   gst_segment_init(&scope->priv->segment, GST_FORMAT_UNDEFINED);
 
@@ -469,8 +466,22 @@ no_format: {
 }
 }
 
+void gst_pm_audio_visualizer_on_pad_added(GstElement *src, GstPad *new_pad,
+                                          gpointer data) {
+  GstElement *sink = GST_ELEMENT(data);
+  GstPad *sink_pad = gst_element_get_static_pad(sink, "sink");
+
+  if (!gst_pad_is_linked(sink_pad)) {
+    if (gst_pad_link(new_pad, sink_pad) != GST_PAD_LINK_OK) {
+      g_warning("Failed to link pads");
+    }
+  }
+
+  gst_object_unref(sink_pad);
+}
+
 /* takes ownership of the pool, allocator and query */
-static gboolean gst_audio_visualizer_set_allocation(
+static gboolean gst_pm_audio_visualizer_set_allocation(
     GstPMAudioVisualizer *scope, GstBufferPool *pool, GstAllocator *allocator,
     const GstAllocationParams *params, GstQuery *query) {
   GstAllocator *oldalloc;
@@ -554,8 +565,8 @@ gst_pm_audio_visualizer_do_bufferpool(GstPMAudioVisualizer *scope,
     gst_query_parse_nth_allocation_pool(query, 0, &pool, NULL, NULL, NULL);
 
   /* now store */
-  result = gst_audio_visualizer_set_allocation(scope, pool, allocator, &params,
-                                               query);
+  result = gst_pm_audio_visualizer_set_allocation(scope, pool, allocator,
+                                                  &params, query);
 
   return result;
 
@@ -621,8 +632,10 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
   GstPMAudioVisualizerClass *klass;
   guint64 dist, ts;
   guint avail, sbpf;
-  // databuf is a buffer pointing to single video frame worth of audio data from the adapter
-  // inbuf is a buffer holding a copy of the current single video frame worth of audio data from the adapter to process
+  // databuf is a buffer holding to one video frame worth of audio data used as
+  // temp buffer for copying from the adapter only
+  // inbuf is a plugin-scoped buffer holding a copy of the one video frame worth
+  // of audio data from the adapter to process
   GstBuffer *databuf, *inbuf;
   gint bpf, rate;
 
@@ -686,7 +699,8 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
       gint64 qostime;
 
       qostime = gst_segment_to_running_time(&scope->priv->segment,
-                                                 GST_FORMAT_TIME, ts) + scope->priv->frame_duration;
+                                            GST_FORMAT_TIME, ts) +
+                scope->priv->frame_duration;
 
       GST_OBJECT_LOCK(scope);
       earliest_time = scope->priv->earliest_time;
@@ -749,9 +763,9 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     klass->map_output_buffer(scope, &outframe, outbuf);
 
     /* place sbpf number of bytes of audio data into inbuf  */
-    gst_buffer_remove_all_memory (inbuf);
-    gst_buffer_copy_into (inbuf, databuf, GST_BUFFER_COPY_MEMORY, 0, sbpf);
-    gst_buffer_unref (databuf);
+    gst_buffer_remove_all_memory(inbuf);
+    gst_buffer_copy_into(inbuf, databuf, GST_BUFFER_COPY_MEMORY, 0, sbpf);
+    gst_buffer_unref(databuf);
 
     /* call class->render() vmethod */
     if (klass->render) {
@@ -832,8 +846,10 @@ static gboolean gst_pm_audio_visualizer_src_event(GstPad *pad,
        * frame (see part-qos.txt) */
       // bugfix, original calc seems like a lot:
       // timestamp + diff * 2 + scope->priv->frame_duration;
-      // a bugfix has been added since to limit drops to second: scope->priv->earliest_time = timestamp + MIN (2 * diff, GST_SECOND) + scope->priv->frame_duration;
-      // let's just continue with the next frame from where we are now
+      // a bugfix has been added since to limit drops to second:
+      // scope->priv->earliest_time = timestamp + MIN (2 * diff, GST_SECOND) +
+      // scope->priv->frame_duration; let's just continue with the next frame
+      // from where we are now
       scope->priv->earliest_time = timestamp + scope->priv->frame_duration;
     else
       scope->priv->earliest_time = timestamp + diff;
@@ -873,7 +889,7 @@ static gboolean gst_pm_audio_visualizer_sink_event(GstPad *pad,
     break;
   }
   case GST_EVENT_FLUSH_STOP:
-    gst_audio_visualizer_reset(scope);
+    gst_pm_audio_visualizer_reset(scope);
     res = gst_pad_push_event(scope->priv->srcpad, event);
     break;
   case GST_EVENT_SEGMENT: {
@@ -961,7 +977,7 @@ gst_pm_audio_visualizer_change_state(GstElement *element,
 
   switch (transition) {
   case GST_STATE_CHANGE_READY_TO_PAUSED:
-    gst_audio_visualizer_reset(scope);
+    gst_pm_audio_visualizer_reset(scope);
     break;
   default:
     break;
@@ -971,7 +987,7 @@ gst_pm_audio_visualizer_change_state(GstElement *element,
 
   switch (transition) {
   case GST_STATE_CHANGE_PAUSED_TO_READY:
-    gst_audio_visualizer_set_allocation(scope, NULL, NULL, NULL, NULL);
+    gst_pm_audio_visualizer_set_allocation(scope, NULL, NULL, NULL, NULL);
     break;
   case GST_STATE_CHANGE_READY_TO_NULL:
     break;

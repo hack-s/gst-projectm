@@ -365,7 +365,8 @@ static void gst_gl_base_audio_visualizer_parent_map_output_buffer(
     GstPMAudioVisualizer *scope, GstVideoFrame *outframe, GstBuffer *outbuf) {
   /* map video to gl memory */
   gst_video_frame_map(outframe, &scope->vinfo, outbuf,
-                      GST_MAP_WRITE | GST_MAP_GL | GST_VIDEO_FRAME_MAP_FLAG_NO_REF);
+                      GST_MAP_WRITE | GST_MAP_GL |
+                          GST_VIDEO_FRAME_MAP_FLAG_NO_REF);
 }
 
 static gboolean gst_gl_base_audio_visualizer_default_fill_gl_memory(
