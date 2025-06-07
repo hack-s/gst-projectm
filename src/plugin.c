@@ -26,6 +26,8 @@ GST_DEBUG_CATEGORY_STATIC(gst_projectm_debug);
 struct _GstProjectMPrivate {
   GLenum gl_format;
   projectm_handle handle;
+  projectm_playlist_handle playlist;
+  GRecMutex projectm_lock;
 
   GstClockTime first_frame_time;
   gboolean first_frame_received;
@@ -47,9 +49,11 @@ void gst_projectm_set_property(GObject *object, guint property_id,
 
   switch (property_id) {
   case PROP_PRESET_PATH:
+    g_free(plugin->preset_path);
     plugin->preset_path = g_strdup(g_value_get_string(value));
     break;
   case PROP_TEXTURE_DIR_PATH:
+    g_free(plugin->texture_dir_path);
     plugin->texture_dir_path = g_strdup(g_value_get_string(value));
     break;
   case PROP_BEAT_SENSITIVITY:
@@ -201,22 +205,32 @@ static void gst_projectm_init(GstProjectM *plugin) {
   plugin->easter_egg = DEFAULT_EASTER_EGG;
   plugin->preset_locked = DEFAULT_PRESET_LOCKED;
   plugin->priv->handle = NULL;
+  plugin->priv->playlist = NULL;
+  g_rec_mutex_init(&plugin->priv->projectm_lock);
 }
 
 static void gst_projectm_finalize(GObject *object) {
   GstProjectM *plugin = GST_PROJECTM(object);
   g_free(plugin->preset_path);
   g_free(plugin->texture_dir_path);
+  g_rec_mutex_clear(&plugin->priv->projectm_lock);
   G_OBJECT_CLASS(gst_projectm_parent_class)->finalize(object);
 }
 
 static void gst_projectm_gl_stop(GstGLBaseAudioVisualizer *src) {
   GstProjectM *plugin = GST_PROJECTM(src);
+  g_rec_mutex_lock(&plugin->priv->projectm_lock);
+  if (plugin->priv->playlist) {
+    GST_DEBUG_OBJECT(plugin, "Destroying ProjectM playlist instance");
+    projectm_playlist_destroy(plugin->priv->playlist);
+    plugin->priv->playlist = NULL;
+  }
   if (plugin->priv->handle) {
     GST_DEBUG_OBJECT(plugin, "Destroying ProjectM instance");
     projectm_destroy(plugin->priv->handle);
     plugin->priv->handle = NULL;
   }
+  g_rec_mutex_unlock(&plugin->priv->projectm_lock);
 }
 
 static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
@@ -231,17 +245,20 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
     return FALSE;
   }
 #endif
+  g_rec_mutex_lock(&plugin->priv->projectm_lock);
 
   // Check if ProjectM instance exists, and create if not
   if (!plugin->priv->handle) {
     // Create ProjectM instance
-    plugin->priv->handle = projectm_init(plugin);
-    if (!plugin->priv->handle) {
+    bool result =
+        projectm_init(plugin, &plugin->priv->handle, &plugin->priv->playlist);
+    if (!result || !plugin->priv->handle) {
       GST_ERROR_OBJECT(plugin, "ProjectM could not be initialized");
       return FALSE;
     }
     gl_error_handler(glav->context, plugin);
   }
+  g_rec_mutex_unlock(&plugin->priv->projectm_lock);
 
   return TRUE;
 }
@@ -320,6 +337,8 @@ static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav,
                                     GstBuffer *audio, GstVideoFrame *video) {
   GstProjectM *plugin = GST_PROJECTM(glav);
 
+  g_rec_mutex_lock(&plugin->priv->projectm_lock);
+
   GstMapInfo audioMap;
   gboolean result = TRUE;
 
@@ -351,6 +370,7 @@ static gboolean gst_projectm_render(GstGLBaseAudioVisualizer *glav,
   projectm_get_window_size(plugin->priv->handle, &windowWidth, &windowHeight);
 
   projectm_opengl_render_frame(plugin->priv->handle);
+  g_rec_mutex_unlock(&plugin->priv->projectm_lock);
   gl_error_handler(glav->context, plugin);
 
   glFunctions->ReadPixels(0, 0, windowWidth, windowHeight,
