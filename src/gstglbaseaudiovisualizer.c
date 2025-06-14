@@ -65,6 +65,8 @@
 #define GST_CAT_DEFAULT gst_gl_base_audio_visualizer_debug
 GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
+#define DEFAULT_TIMESTAMP_OFFSET 0
+
 struct _GstGLBaseAudioVisualizerPrivate {
   GstGLContext *other_context;
   GstGLMemory *out_tex;
@@ -215,6 +217,14 @@ gst_gl_base_audio_visualizer_class_init(GstGLBaseAudioVisualizerClass *klass) {
 
   klass->prepare_output_buffer = GST_DEBUG_FUNCPTR(
       gst_gl_base_audio_visualizer_default_prepare_output_buffer);
+
+  g_object_class_install_property(
+    gobject_class, PROP_TIMESTAMP_OFFSET,
+    g_param_spec_int64(
+        "timestamp-offset", "Timestamp Offset",
+        "Specifies initial offset for the stream timestamp.", 0, G_MAXINT64,
+        DEFAULT_TIMESTAMP_OFFSET, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
 }
 
 static void gst_gl_base_audio_visualizer_init(GstGLBaseAudioVisualizer *glav) {
@@ -225,7 +235,6 @@ static void gst_gl_base_audio_visualizer_init(GstGLBaseAudioVisualizer *glav) {
   glav->priv->out_tex = NULL;
   glav->context = NULL;
   glav->pts = 0;
-  glav->priv->timestamp_offset = 0;
   g_rec_mutex_init(&glav->priv->context_lock);
   gst_gl_base_audio_visualizer_start(glav);
 }
