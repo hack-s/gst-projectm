@@ -341,7 +341,9 @@ gst_pm_audio_visualizer_sink_setcaps(GstPMAudioVisualizer *scope,
   if (!gst_audio_info_from_caps(&info, caps))
     goto wrong_caps;
 
+  g_mutex_lock(&scope->priv->config_lock);
   scope->ainfo = info;
+  g_mutex_unlock(&scope->priv->config_lock);
 
   GST_DEBUG_OBJECT(scope, "audio: channels %d, rate %d",
                    GST_AUDIO_INFO_CHANNELS(&info), GST_AUDIO_INFO_RATE(&info));
@@ -374,6 +376,8 @@ static gboolean gst_pm_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
 
   klass = GST_PM_AUDIO_VISUALIZER_CLASS(G_OBJECT_GET_CLASS(scope));
 
+  g_mutex_lock(&scope->priv->config_lock);
+
   scope->vinfo = info;
 
   scope->priv->frame_duration = gst_util_uint64_scale_int(
@@ -382,6 +386,8 @@ static gboolean gst_pm_audio_visualizer_src_setcaps(GstPMAudioVisualizer *scope,
       GST_AUDIO_INFO_RATE(&scope->ainfo), GST_VIDEO_INFO_FPS_D(&info),
       GST_VIDEO_INFO_FPS_N(&info));
   scope->req_spf = scope->priv->spf;
+
+  g_mutex_unlock(&scope->priv->config_lock);
 
   if (klass->setup && !klass->setup(scope))
     goto setup_failed;
@@ -760,7 +766,9 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
       break;
 
     /* allow customized memory to video frame mapping */
+    g_mutex_unlock(&scope->priv->config_lock);
     klass->map_output_buffer(scope, &outframe, outbuf);
+    g_mutex_lock(&scope->priv->config_lock);
 
     /* place sbpf number of bytes of audio data into inbuf  */
     gst_buffer_remove_all_memory(inbuf);
@@ -769,11 +777,14 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
 
     /* call class->render() vmethod */
     if (klass->render) {
+      g_mutex_unlock(&scope->priv->config_lock);
       if (!klass->render(scope, inbuf, &outframe)) {
+        g_mutex_lock(&scope->priv->config_lock);
         ret = GST_FLOW_ERROR;
         gst_video_frame_unmap(&outframe);
         goto beach;
       }
+      g_mutex_lock(&scope->priv->config_lock);
     }
     gst_video_frame_unmap(&outframe);
 
