@@ -21,8 +21,9 @@
 
 GST_DEBUG_CATEGORY_STATIC(gst_projectm_debug);
 #define GST_CAT_DEFAULT gst_projectm_debug
-#define GST_PROJECTM_LOCK(plugin)   (g_mutex_lock(&plugin->priv->projectm_lock))
-#define GST_PROJECTM_UNLOCK(plugin) (g_mutex_unlock(&plugin->priv->projectm_lock))
+#define GST_PROJECTM_LOCK(plugin) (g_mutex_lock(&plugin->priv->projectm_lock))
+#define GST_PROJECTM_UNLOCK(plugin)                                            \
+  (g_mutex_unlock(&plugin->priv->projectm_lock))
 
 struct _GstProjectMPrivate {
   projectm_handle handle;
@@ -347,7 +348,8 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
   if (!plugin->priv->handle) {
     // Create ProjectM instance
     plugin->priv->first_frame_received = FALSE;
-    if (!projectm_init(plugin, &plugin->priv->handle, &plugin->priv->playlist)) {
+    if (!projectm_init(plugin, &plugin->priv->handle,
+                       &plugin->priv->playlist)) {
       GST_ERROR_OBJECT(plugin, "ProjectM could not be initialized");
       return FALSE;
     }

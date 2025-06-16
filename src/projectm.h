@@ -1,10 +1,7 @@
 #ifndef __PROJECTM_H__
 #define __PROJECTM_H__
 
-#include <glib.h>
-
 #include "plugin.h"
-#include <projectM-4/projectM.h>
 #include <projectM-4/playlist.h>
 
 G_BEGIN_DECLS

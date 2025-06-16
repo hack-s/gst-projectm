@@ -862,8 +862,9 @@ static gboolean gst_pm_audio_visualizer_src_event(GstPad *pad,
       // scope->priv->frame_duration;
       // the proposed one second is still way too much for us
       // just allow dropping a few frames
-      scope->priv->earliest_time = timestamp +
-        MIN(2 * diff, scope->priv->frame_duration * 2) + scope->priv->frame_duration;
+      scope->priv->earliest_time =
+          timestamp + MIN(2 * diff, scope->priv->frame_duration * 2) +
+          scope->priv->frame_duration;
     else
       scope->priv->earliest_time = timestamp + diff;
     GST_OBJECT_UNLOCK(scope);
