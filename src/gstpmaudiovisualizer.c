@@ -852,16 +852,18 @@ static gboolean gst_pm_audio_visualizer_src_event(GstPad *pad,
     /* save stuff for the _chain() function */
     GST_OBJECT_LOCK(scope);
     scope->priv->proportion = proportion;
-    if (diff >= 0)
+    if (diff > 0)
       /* we're late, this is a good estimate for next displayable
        * frame (see part-qos.txt) */
       // bugfix, original calc seems like a lot:
       // timestamp + diff * 2 + scope->priv->frame_duration;
       // a bugfix has been added since to limit drops to second:
       // scope->priv->earliest_time = timestamp + MIN (2 * diff, GST_SECOND) +
-      // scope->priv->frame_duration; let's just continue with the next frame
-      // from where we are now
-      scope->priv->earliest_time = timestamp + scope->priv->frame_duration;
+      // scope->priv->frame_duration;
+      // the proposed one second is still way too much for us
+      // just allow dropping a few frames
+      scope->priv->earliest_time = timestamp +
+        MIN(2 * diff, scope->priv->frame_duration * 2) + scope->priv->frame_duration;
     else
       scope->priv->earliest_time = timestamp + diff;
     GST_OBJECT_UNLOCK(scope);
