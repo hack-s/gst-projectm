@@ -13,7 +13,8 @@
 GST_DEBUG_CATEGORY_STATIC(projectm_debug);
 #define GST_CAT_DEFAULT projectm_debug
 
-projectm_handle projectm_init(GstProjectM *plugin) {
+bool projectm_init(GstProjectM *plugin, projectm_handle *ret_handle,
+                   projectm_playlist_handle *ret_playlist) {
   projectm_handle handle = NULL;
   projectm_playlist_handle playlist = NULL;
   GST_DEBUG_CATEGORY_INIT(projectm_debug, "projectm", 0, "ProjectM");
@@ -28,16 +29,18 @@ projectm_handle projectm_init(GstProjectM *plugin) {
     GST_DEBUG_OBJECT(
         plugin,
         "project_create() returned NULL, projectM instance was not created!");
-    return NULL;
+    return FALSE;
   } else {
     GST_DEBUG_OBJECT(plugin, "Created projectM instance!");
   }
+  *ret_handle = handle;
 
   if (plugin->enable_playlist) {
     GST_DEBUG_OBJECT(plugin, "Playlist enabled");
 
     // initialize preset playlist
     playlist = projectm_playlist_create(handle);
+    *ret_playlist = playlist;
     projectm_playlist_set_shuffle(playlist, plugin->shuffle_presets);
     // projectm_playlist_set_preset_switched_event_callback(_playlist,
     // &ProjectMWrapper::PresetSwitchedEvent, static_cast<void*>(this));
@@ -72,7 +75,7 @@ projectm_handle projectm_init(GstProjectM *plugin) {
 
   // Load preset file if path is provided
   if (plugin->preset_path != NULL) {
-    int added_count =
+    unsigned int added_count =
         projectm_playlist_add_path(playlist, plugin->preset_path, true, false);
     GST_INFO("Loaded preset path: %s, presets found: %d", plugin->preset_path,
              added_count);
@@ -115,7 +118,7 @@ projectm_handle projectm_init(GstProjectM *plugin) {
   projectm_set_window_size(handle, GST_VIDEO_INFO_WIDTH(&bscope->vinfo),
                            GST_VIDEO_INFO_HEIGHT(&bscope->vinfo));
 
-  return handle;
+  return TRUE;
 }
 
 // void projectm_render(GstProjectM *plugin, gint16 *samples, gint sample_count)

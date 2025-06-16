@@ -21,9 +21,13 @@
 
 GST_DEBUG_CATEGORY_STATIC(gst_projectm_debug);
 #define GST_CAT_DEFAULT gst_projectm_debug
+#define GST_PROJECTM_LOCK(plugin)   (g_mutex_lock(&plugin->priv->projectm_lock))
+#define GST_PROJECTM_UNLOCK(plugin) (g_mutex_unlock(&plugin->priv->projectm_lock))
 
 struct _GstProjectMPrivate {
   projectm_handle handle;
+  projectm_playlist_handle playlist;
+  GMutex projectm_lock;
 
   GstClockTime first_frame_time;
   gboolean first_frame_received;
@@ -79,9 +83,10 @@ static GstFlowReturn
 gst_projectm_prepare_output_buffer(GstGLBaseAudioVisualizer *scope,
                                    GstBuffer **outbuf) {
   GstProjectM *plugin = GST_PROJECTM(scope);
-
+  GST_PROJECTM_LOCK(plugin);
   *outbuf = wrap_gl_texture(scope, plugin);
   GST_DEBUG_OBJECT(plugin, "Wrapped RT texture buffer");
+  GST_PROJECTM_UNLOCK(plugin);
   return GST_FLOW_OK;
 }
 
@@ -261,17 +266,20 @@ static void gst_projectm_init(GstProjectM *plugin) {
   plugin->priv->in_audio = NULL;
   plugin->priv->mem = NULL;
   plugin->priv->allocation_params = NULL;
+  g_mutex_init(&plugin->priv->projectm_lock);
 }
 
 static void gst_projectm_finalize(GObject *object) {
   GstProjectM *plugin = GST_PROJECTM(object);
   g_free(plugin->preset_path);
   g_free(plugin->texture_dir_path);
+  g_mutex_clear(&plugin->priv->projectm_lock);
   G_OBJECT_CLASS(gst_projectm_parent_class)->finalize(object);
 }
 
 static void gst_projectm_gl_stop(GstGLBaseAudioVisualizer *src) {
   GstProjectM *plugin = GST_PROJECTM(src);
+  GST_PROJECTM_LOCK(plugin);
   if (plugin->priv->handle) {
     GST_DEBUG_OBJECT(plugin, "Destroying ProjectM instance");
     projectm_destroy(plugin->priv->handle);
@@ -291,6 +299,7 @@ static void gst_projectm_gl_stop(GstGLBaseAudioVisualizer *src) {
     gst_gl_video_allocation_params_free_data(plugin->priv->allocation_params);
     plugin->priv->allocation_params = NULL;
   }
+  GST_PROJECTM_UNLOCK(plugin);
 }
 
 static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
@@ -307,6 +316,7 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
   }
 #endif
 
+  GST_PROJECTM_LOCK(plugin);
   // initialize render texture
   // todo: let gst create the texture
   const GstGLFuncs *glFunctions = glav->context->gl_vtable;
@@ -336,9 +346,8 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
   // Check if ProjectM instance exists, and create if not
   if (!plugin->priv->handle) {
     // Create ProjectM instance
-    plugin->priv->handle = projectm_init(plugin);
     plugin->priv->first_frame_received = FALSE;
-    if (!plugin->priv->handle) {
+    if (!projectm_init(plugin, &plugin->priv->handle, &plugin->priv->playlist)) {
       GST_ERROR_OBJECT(plugin, "ProjectM could not be initialized");
       return FALSE;
     }
@@ -349,6 +358,7 @@ static gboolean gst_projectm_gl_start(GstGLBaseAudioVisualizer *glav) {
       glav->context, GST_VIDEO_INFO_WIDTH(&gstav->vinfo),
       GST_VIDEO_INFO_HEIGHT(&gstav->vinfo));
 
+  GST_PROJECTM_UNLOCK(plugin);
   GST_INFO_OBJECT(plugin, "GL start complete");
   return TRUE;
 }
@@ -455,6 +465,8 @@ static gboolean gst_projectm_fill_gl_memory(GstGLBaseAudioVisualizer *glav,
 
   GstProjectM *plugin = GST_PROJECTM(glav);
 
+  GST_PROJECTM_LOCK(plugin);
+
   plugin->priv->in_audio = in_audio;
   plugin->priv->mem = mem;
 
@@ -463,6 +475,8 @@ static gboolean gst_projectm_fill_gl_memory(GstGLBaseAudioVisualizer *glav,
 
   plugin->priv->in_audio = NULL;
   plugin->priv->mem = NULL;
+
+  GST_PROJECTM_UNLOCK(plugin);
 
   return result;
 }

@@ -5,13 +5,15 @@
 
 #include "plugin.h"
 #include <projectM-4/projectM.h>
+#include <projectM-4/playlist.h>
 
 G_BEGIN_DECLS
 
 /**
  * @brief Initialize ProjectM
  */
-projectm_handle projectm_init(GstProjectM *plugin);
+bool projectm_init(GstProjectM *plugin, projectm_handle *handle,
+                   projectm_playlist_handle *playlist);
 
 /**
  * @brief Render ProjectM
