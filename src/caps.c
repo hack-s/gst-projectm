@@ -39,8 +39,8 @@ const gchar *get_video_src_cap(unsigned int type) {
 
   switch (type) {
   case 0:
-    format = GST_VIDEO_CAPS_MAKE("video/x-raw(memory:GLMemory), format = (string) { RGBA }, "
-                                 "framerate=(fraction)[0/1,MAX]");
+    format = GST_VIDEO_CAPS_MAKE_WITH_FEATURES("memory:GLMemory", "RGBA");
+
     break;
   default:
     format = NULL;
