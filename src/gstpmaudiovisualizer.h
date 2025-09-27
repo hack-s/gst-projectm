@@ -70,11 +70,10 @@ struct _GstPMAudioVisualizer {
   /* audio state */
   GstAudioInfo ainfo;
 
-  /* current time (ns) position within the input stream */
-  guint64 stream_time;
-
   /*< private >*/
   GstPMAudioVisualizerPrivate *priv;
+
+  guint64 frame_duration;
 };
 
 /**
@@ -99,7 +98,7 @@ struct _GstPMAudioVisualizerClass {
 
   /* virtual function for rendering a frame */
   gboolean (*render)(GstPMAudioVisualizer *scope, GstBuffer *audio,
-                     GstVideoFrame *video);
+                     GstVideoFrame *video, GstClockTime pts);
 
   /* virtual function for buffer pool allocation  */
   gboolean (*decide_allocation)(GstPMAudioVisualizer *scope, GstQuery *query);
@@ -111,6 +110,11 @@ struct _GstPMAudioVisualizerClass {
   /* virtual function for mapping the output buffer to video frame */
   void (*map_output_buffer)(GstPMAudioVisualizer *scope,
                             GstVideoFrame *outframe, GstBuffer *outbuf);
+
+  /* virtual function to allow overridden change_state, cascading to GstElement
+   */
+  GstStateChangeReturn (*change_state)(GstElement *element,
+                                       GstStateChange transition);
 };
 
 GType gst_pm_audio_visualizer_get_type(void);

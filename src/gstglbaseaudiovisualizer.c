@@ -69,13 +69,10 @@ GST_DEBUG_CATEGORY_STATIC(GST_CAT_DEFAULT);
 
 struct _GstGLBaseAudioVisualizerPrivate {
   GstGLContext *other_context;
-  GstGLMemory *out_tex;
+  GstBuffer *out_video;
   GstBuffer *in_audio;
 
-  gint64 timestamp_offset;       /* base offset */
-  gint64 n_frames;               /* total frames sent */
-  GstClockTime buf_running_time; /* determined by no. of frames rendered. clock
-                                    for buffer position. */
+  gint64 n_frames; /* total frames sent */
 
   gboolean gl_result;
   gboolean gl_started;
@@ -84,7 +81,7 @@ struct _GstGLBaseAudioVisualizerPrivate {
 };
 
 /* Properties */
-enum { PROP_0, PROP_TIMESTAMP_OFFSET };
+enum { PROP_0 };
 
 #define gst_gl_base_audio_visualizer_parent_class parent_class
 G_DEFINE_ABSTRACT_TYPE_WITH_CODE(
@@ -116,7 +113,8 @@ gst_gl_base_audio_visualizer_change_state(GstElement *element,
 /* renders a video frame using gl, impl for parent class
  * GstPMAudioVisualizerClass. */
 static gboolean gst_gl_base_audio_visualizer_parent_render(
-    GstPMAudioVisualizer *bscope, GstBuffer *audio, GstVideoFrame *video);
+    GstPMAudioVisualizer *bscope, GstBuffer *audio, GstVideoFrame *video,
+    GstClockTime pts);
 
 /* internal utility for resetting state on start */
 static void gst_gl_base_audio_visualizer_start(GstGLBaseAudioVisualizer *glav);
@@ -184,7 +182,7 @@ gst_gl_base_audio_visualizer_class_init(GstGLBaseAudioVisualizerClass *klass) {
   element_class->set_context =
       GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_set_context);
 
-  element_class->change_state =
+  gstav_class->change_state =
       GST_DEBUG_FUNCPTR(gst_gl_base_audio_visualizer_change_state);
 
   gstav_class->decide_allocation =
@@ -217,13 +215,6 @@ gst_gl_base_audio_visualizer_class_init(GstGLBaseAudioVisualizerClass *klass) {
 
   klass->prepare_output_buffer = GST_DEBUG_FUNCPTR(
       gst_gl_base_audio_visualizer_default_prepare_output_buffer);
-
-  g_object_class_install_property(
-      gobject_class, PROP_TIMESTAMP_OFFSET,
-      g_param_spec_int64("timestamp-offset", "Timestamp Offset",
-                         "Specifies initial offset for the stream timestamp.",
-                         0, G_MAXINT64, DEFAULT_TIMESTAMP_OFFSET,
-                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 }
 
 static void gst_gl_base_audio_visualizer_init(GstGLBaseAudioVisualizer *glav) {
@@ -231,7 +222,7 @@ static void gst_gl_base_audio_visualizer_init(GstGLBaseAudioVisualizer *glav) {
   glav->priv->gl_started = FALSE;
   glav->priv->gl_result = TRUE;
   glav->priv->in_audio = NULL;
-  glav->priv->out_tex = NULL;
+  glav->priv->out_video = NULL;
   glav->context = NULL;
   glav->pts = 0;
   g_rec_mutex_init(&glav->priv->context_lock);
@@ -255,10 +246,6 @@ static void gst_gl_base_audio_visualizer_set_property(GObject *object,
 
   switch (prop_id) {
 
-  case PROP_TIMESTAMP_OFFSET:
-    glav->priv->timestamp_offset = g_value_get_int64(value);
-    break;
-
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
     break;
@@ -272,10 +259,6 @@ static void gst_gl_base_audio_visualizer_get_property(GObject *object,
   GstGLBaseAudioVisualizer *glav = GST_GL_BASE_AUDIO_VISUALIZER(object);
 
   switch (prop_id) {
-
-  case PROP_TIMESTAMP_OFFSET:
-    g_value_set_int64(value, glav->priv->timestamp_offset);
-    break;
 
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -386,17 +369,19 @@ static void _fill_gl(GstGLContext *context, GstGLBaseAudioVisualizer *glav) {
   GstGLBaseAudioVisualizerClass *klass =
       GST_GL_BASE_AUDIO_VISUALIZER_GET_CLASS(glav);
 
-  GST_TRACE_OBJECT(glav, "filling gl memory %p", glav->priv->out_tex);
+  GstGLMemory *out_tex =
+      GST_GL_MEMORY_CAST(gst_buffer_peek_memory(glav->priv->out_video, 0));
+
+  GST_TRACE_OBJECT(glav, "filling gl memory %p", out_tex);
+
   // inside gl thread: call virtual render function with audio and video
   glav->priv->gl_result =
-      klass->fill_gl_memory(glav, glav->priv->in_audio, glav->priv->out_tex);
+      klass->fill_gl_memory(glav, glav->priv->in_audio, out_tex);
 }
 
-static GstFlowReturn
-gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
-                                  GstGLBaseAudioVisualizer *glav,
-                                  GstBuffer *audio, GstVideoFrame *video) {
-  GstClockTime next_time;
+static GstFlowReturn gst_gl_base_audio_visualizer_fill(
+    GstPMAudioVisualizer *bscope, GstGLBaseAudioVisualizer *glav,
+    GstBuffer *audio, GstVideoFrame *video, GstClockTime pts) {
   GstGLSyncMeta *sync_meta;
 
   g_rec_mutex_lock(&glav->priv->context_lock);
@@ -412,19 +397,32 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
 
   // the following vars are params for passing values to _fill_gl()
   // video is mapped to gl memory
-  glav->priv->out_tex = (GstGLMemory *)video->map[0].memory;
-  glav->priv->in_audio = audio;
+
+  glav->priv->out_video = buffer;
+  glav->priv->in_audio = audio != NULL ? gst_buffer_ref(audio) : NULL;
 
   // make current presentation timestamp accessible before rendering
-  glav->pts = GST_BUFFER_PTS(buffer);
+  glav->pts = pts;
+
+  GstClockTime start = gst_util_get_timestamp();
 
   // dispatch _fill_gl to the gl thread, blocking call
   gst_gl_context_thread_add(glav->context, (GstGLContextThreadFunc)_fill_gl,
                             glav);
+  GstClockTime end = gst_util_get_timestamp();
+  GstClockTime duration = end - start;
+
+  if (duration > bscope->frame_duration) {
+    GST_WARNING("Render GL frame took too long: %" GST_TIME_FORMAT,
+                GST_TIME_ARGS(duration));
+  }
 
   // clear param refs, these pointers never owned the data
-  glav->priv->out_tex = NULL;
-  glav->priv->in_audio = NULL;
+  glav->priv->out_video = NULL;
+  if (glav->priv->in_audio != NULL) {
+    gst_buffer_unref(glav->priv->in_audio);
+    glav->priv->in_audio = NULL;
+  }
 
   if (!glav->priv->gl_result)
     goto gl_error;
@@ -433,25 +431,9 @@ gst_gl_base_audio_visualizer_fill(GstPMAudioVisualizer *bscope,
   if (sync_meta)
     gst_gl_sync_meta_set_sync_point(sync_meta, glav->context);
 
-  g_rec_mutex_unlock(&glav->priv->context_lock);
-
-  GST_BUFFER_TIMESTAMP(buffer) =
-      glav->priv->timestamp_offset + glav->priv->buf_running_time;
-  GST_BUFFER_OFFSET(buffer) = glav->priv->n_frames;
   glav->priv->n_frames++;
-  GST_BUFFER_OFFSET_END(buffer) = glav->priv->n_frames;
-  if (bscope->vinfo.fps_n) {
-    next_time =
-        gst_util_uint64_scale_int(glav->priv->n_frames * GST_SECOND,
-                                  bscope->vinfo.fps_d, bscope->vinfo.fps_n);
-    GST_BUFFER_DURATION(buffer) = next_time - glav->priv->buf_running_time;
-  } else {
-    next_time = glav->priv->timestamp_offset;
-    /* NONE means forever */
-    GST_BUFFER_DURATION(buffer) = GST_CLOCK_TIME_NONE;
-  }
 
-  glav->priv->buf_running_time = next_time;
+  g_rec_mutex_unlock(&glav->priv->context_lock);
 
   return GST_FLOW_OK;
 
@@ -487,17 +469,17 @@ gst_gl_base_audio_visualizer_parent_setup(GstPMAudioVisualizer *gstav) {
 }
 
 static gboolean gst_gl_base_audio_visualizer_parent_render(
-    GstPMAudioVisualizer *bscope, GstBuffer *audio, GstVideoFrame *video) {
+    GstPMAudioVisualizer *bscope, GstBuffer *audio, GstVideoFrame *video,
+    GstClockTime pts) {
   GstGLBaseAudioVisualizer *glav = GST_GL_BASE_AUDIO_VISUALIZER(bscope);
 
-  gst_gl_base_audio_visualizer_fill(bscope, glav, audio, video);
+  gst_gl_base_audio_visualizer_fill(bscope, glav, audio, video, pts);
 
   return glav->priv->gl_result;
 }
 
 static void gst_gl_base_audio_visualizer_start(GstGLBaseAudioVisualizer *glav) {
   glav->priv->n_frames = 0;
-  glav->priv->buf_running_time = 0;
 }
 
 static void gst_gl_base_audio_visualizer_stop(GstGLBaseAudioVisualizer *glav) {
@@ -680,7 +662,9 @@ static gboolean gst_gl_base_audio_visualizer_parent_decide_allocation(
     gst_video_info_init(&vinfo);
     gst_video_info_from_caps(&vinfo, caps);
     size = vinfo.size;
-    min = max = 0;
+    // make number of textures used to rotate through configurable ?
+    min = 2;
+    max = 4;
     update_pool = FALSE;
   }
 
@@ -699,6 +683,9 @@ static gboolean gst_gl_base_audio_visualizer_parent_decide_allocation(
                                       GST_BUFFER_POOL_OPTION_GL_SYNC_META);
   gst_buffer_pool_config_add_option(
       config, GST_BUFFER_POOL_OPTION_VIDEO_GL_TEXTURE_UPLOAD_META);
+
+  gst_buffer_pool_config_add_option(
+      config, GST_BUFFER_POOL_OPTION_GL_TEXTURE_TARGET_2D);
 
   gst_buffer_pool_set_config(pool, config);
 
@@ -723,10 +710,6 @@ gst_gl_base_audio_visualizer_change_state(GstElement *element,
       glav, "changing state: %s => %s",
       gst_element_state_get_name(GST_STATE_TRANSITION_CURRENT(transition)),
       gst_element_state_get_name(GST_STATE_TRANSITION_NEXT(transition)));
-
-  ret = GST_ELEMENT_CLASS(parent_class)->change_state(element, transition);
-  if (ret == GST_STATE_CHANGE_FAILURE)
-    return ret;
 
   switch (transition) {
   case GST_STATE_CHANGE_READY_TO_NULL:

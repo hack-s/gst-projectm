@@ -2,7 +2,7 @@
 #define __GST_PROJECTM_H__
 
 #include "gstglbaseaudiovisualizer.h"
-#include <gst/gst.h>
+#include "pluginbase.h"
 
 typedef struct _GstProjectMPrivate GstProjectMPrivate;
 
@@ -22,23 +22,7 @@ G_DECLARE_FINAL_TYPE(GstProjectM, gst_projectm, GST, PROJECTM,
 struct _GstProjectM {
   GstGLBaseAudioVisualizer element;
 
-  gchar *preset_path;
-  gchar *texture_dir_path;
-
-  gfloat beat_sensitivity;
-  gdouble hard_cut_duration;
-  gboolean hard_cut_enabled;
-  gfloat hard_cut_sensitivity;
-  gdouble soft_cut_duration;
-  gdouble preset_duration;
-  gulong mesh_width;
-  gulong mesh_height;
-  gboolean aspect_correction;
-  gfloat easter_egg;
-  gboolean preset_locked;
-  gboolean enable_playlist;
-  gboolean shuffle_presets;
-  gboolean pts_sync;
+  GstBaseProjectMSettings settings;
 
   GstProjectMPrivate *priv;
 };

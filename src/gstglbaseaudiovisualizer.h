@@ -107,11 +107,12 @@ struct _GstGLBaseAudioVisualizerClass {
   /* called from gl thread once the gl context can be used for initializing gl
    * resources */
   gboolean (*gl_start)(GstGLBaseAudioVisualizer *glav);
-  /* called from gl thread when gl context is being closed for gl resource up */
+  /* called from gl thread when gl context is being closed for gl resource clean
+   * up */
   void (*gl_stop)(GstGLBaseAudioVisualizer *glav);
   /* called when caps have been set for the pipeline */
   gboolean (*setup)(GstGLBaseAudioVisualizer *glav);
-  /* called to render each frame */
+  /* called to render each frame, in_audio is optional */
   gboolean (*fill_gl_memory)(GstGLBaseAudioVisualizer *glav,
                              GstBuffer *in_audio, GstGLMemory *mem);
   /* allocate buffer for frame rendering */

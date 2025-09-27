@@ -57,23 +57,48 @@ The documentation has been organized into distinct files, each dedicated to a sp
 - **[OSX](docs/OSX.md)**
 - **[Windows](docs/WINDOWS.md)**
 
-Once the plugin has been installed, you can use it something like this:
+Once the plugin has been installed, you can use it something like this to render in real-time to an OpenGL window:
 
 ```shell
-gst-launch pipewiresrc ! queue ! audioconvert ! projectm preset=/usr/local/share/projectM/presets preset-duration=5 ! video/x-raw,width=2048,height=1440,framerate=60/1 ! videoconvert ! xvimagesink sync=true
+gst-launch pipewiresrc ! queue ! audioconvert ! "audio/x-raw, format=S16LE, rate=44100, channels=2, layout=interleaved" ! projectm preset=/usr/local/share/projectM/presets preset-duration=5 mesh-size=48,32 ! 'video/x-raw(memory:GLMemory),width=2048,height=1440,framerate=60/1' ! queue leaky=downstream max-size-buffers=1 ! glimagesink sync=true
 ```
 
-Or to convert an audio file to video:
+To render from a live source in real-time to a gl window, an identity element can be used to setup a proper timestamp source for the pipeline. This example also includes a texture directory: 
+```shell
+gst-launch souphttpsrc location=http://your-radio-stream is-live=true ! queue ! decodebin ! audioconvert ! "audio/x-raw, format=S16LE, rate=44100, channels=2, layout=interleaved" ! identity single-segment=true sync=true ! projectm preset=/usr/local/share/projectM/presets preset-duration=5 mesh-size=48,32 texture-dir=/usr/local/share/projectM/presets-milkdrop-texture-pack ! video/x-raw(memory:GLMemory),width=1920,height=1080,framerate=60/1 ! queue leaky=downstream max-size-buffers=1 ! glimagesink sync=true
+```
+
+Or to convert an audio file to video using offline rendering:
 
 ```shell
+gst-launch-1.0 -e \
 filesrc location=input.mp3 ! decodebin name=dec \
     decodebin ! tee name=t \
       t. ! queue ! audioconvert ! audioresample ! \
             capsfilter caps="audio/x-raw, format=F32LE, channels=2, rate=44100" ! avenc_aac bitrate=256000 ! queue ! mux. \
-      t. ! queue ! audioconvert ! projectm preset=/usr/local/share/projectM/presets preset-duration=3 mesh-size=1024,576 ! \
-            identity sync=false ! videoconvert ! videorate ! video/x-raw,framerate=60/1,width=3840,height=2160 ! \
+      t. ! queue ! audioconvert ! capsfilter caps="audio/x-raw, format=S16LE, channels=2, rate=44100" ! \
+           projectm preset=/usr/local/share/projectM/presets preset-duration=3 mesh-size=1024,576 ! \
+            identity sync=false ! videoconvert ! videorate ! video/x-raw\(memory:GLMemory\),framerate=60/1,width=3840,height=2160 ! \
+            gldownload \
             x264enc bitrate=35000 key-int-max=300 speed-preset=veryslow ! video/x-h264,stream-format=avc,alignment=au ! queue ! mux. \
   mp4mux name=mux ! filesink location=render.mp4;
+```
+
+Or converting an audio file with the nVidia optimized encoder, directly from GL memory:
+```shell
+gst-launch-1.0 -e \
+  filesrc location=input.mp3 ! \
+    decodebin ! tee name=t \
+      t. ! queue ! audioconvert ! audioresample ! \
+            capsfilter caps="audio/x-raw, format=F32LE, channels=2, rate=44100" ! \
+            avenc_aac bitrate=320000 ! queue ! mux. \
+      t. ! queue ! audioconvert ! capsfilter caps="audio/x-raw, format=S16LE, channels=2, rate=44100" ! projectm \
+            preset=/usr/local/share/projectM/presets preset-duration=3 mesh-size=1024,576 ! \
+            identity sync=false ! videoconvert ! videorate ! \
+            video/x-raw\(memory:GLMemory\),framerate=60/1,width=1920,height=1080 ! \
+            nvh264enc ! h264parse ! \
+            video/x-h264,stream-format=avc,alignment=au ! queue ! mux. \
+    mp4mux name=mux ! filesink location=render.mp4;
 ```
 
 Available options
@@ -200,14 +225,16 @@ Or to convert an audio file to video:
 
 ```shell
 gst-launch-1.0 -e \
-  filesrc location=input.mp3  ! \
+  filesrc location=input.mp3 ! decodebin name=dec \
     decodebin ! tee name=t \
       t. ! queue ! audioconvert ! audioresample ! \
-            capsfilter caps="audio/x-raw, format=F32LE, channels=2, rate=44100" ! avenc_aac bitrate=320000 ! queue ! mux. \
-      t. ! queue ! audioconvert ! projectm preset=/usr/local/share/projectM/presets texture-dir=/usr/local/share/projectM/textures preset-duration=6 mesh-size=1024,576 ! \
-            identity sync=false ! videoconvert ! videorate ! video/x-raw,framerate=60/1,width=3840,height=2160 ! \
-            x264enc bitrate=50000 key-int-max=200 speed-preset=veryslow ! video/x-h264,stream-format=avc,alignment=au ! queue ! mux. \
-    mp4mux name=mux ! filesink location=output.mp4
+            capsfilter caps="audio/x-raw, format=F32LE, channels=2, rate=44100" ! avenc_aac bitrate=256000 ! queue ! mux. \
+      t. ! queue ! audioconvert ! capsfilter caps="audio/x-raw, format=S16LE, channels=2, rate=44100" ! \
+           projectm preset=/usr/local/share/projectM/presets preset-duration=3 mesh-size=1024,576 ! \
+            identity sync=false ! videoconvert ! videorate ! video/x-raw\(memory:GLMemory\),framerate=60/1,width=3840,height=2160 ! \
+            gldownload \
+            x264enc bitrate=35000 key-int-max=300 speed-preset=veryslow ! video/x-h264,stream-format=avc,alignment=au ! queue ! mux. \
+  mp4mux name=mux ! filesink location=render.mp4;
 ```
 
 You may need to adjust some elements which may or may not be present in your GStreamer installation, such as x264enc, avenc_aac, etc.
@@ -219,6 +246,58 @@ gst-inspect projectm
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## ⚙️ Technical Details and Considerations
+
+This plugin integrates [projectM](https://github.com/projectM-visualizer/projectm) with GStreamer using an audio-driven video generation approach.  
+Each video frame is rendered based on a fixed number of audio samples received on a sink pad.
+
+projectM visuals are rendered to a pooled OpenGL texture via an FBO (framebuffer object).  
+The resulting textures are wrapped as video buffers and pushed on the plugin’s source pad. All rendering and buffer data stay in GPU memory, ensuring efficient performance in GL-based pipelines.
+
+The plugin synchronizes rendering to the GStreamer pipeline clock using audio PTS as the master reference. It supports both real-time playback and offline (faster-than-real-time) rendering depending on the pipeline configuration.
+
+### 🔁 Audio-Driven Video Frame Generation
+
+- A **fixed number of audio samples per video frame** determines the visualization framerate (e.g., 735 samples per frame at 44.1 kHz = ~60 FPS).
+- Audio is consumed from a **sink pad** (e.g. from `pulsesrc`, `filesrc`, or a decoded audio stream).
+- Video frame PTS is derived from the **first audio buffer PTS** or **segment event** plus accumulated samples, ensuring alignment with audio timing.
+
+### 🖼️ OpenGL Rendering and Buffer Handling
+
+- projectM output is rendered to an OpenGL texture via an FBO.
+- Textures are **pooled** and reused across frames to avoid excessive GPU memory allocation and de-allocation.
+- Each rendered texture becomes a GStreamer video buffer pushed downstream.
+- All rendering happens in GPU memory.
+
+### ⏱️ Timing and Synchronization
+
+| Timing Source   | Purpose                                                    |
+|-----------------|------------------------------------------------------------|
+| Audio PTS       | Drives video buffer timestamps.                            |
+| Sample Rate     | Maps audio samples to video frames based on requested fps. |
+| GStreamer Clock | Maintains global pipeline sync.                            |
+| QoS Event       | Triggers frame drops based on QoS reported lag.            |
+
+Timestamps are independent of rendering time — they **remain aligned to audio**, even when rendering is slower or faster.
+
+---
+
+## 📉 Performance Trade-offs and Real-Time Considerations
+
+- Rendering is done in **OpenGL**, and **not offloaded to a separate thread**.
+- If frame rendering exceeds the expected framerate budget (e.g. >16.6ms at 60 FPS), the plugin **blocks audio consumption**.
+- This can lead to:
+    - **Backpressure** in the pipeline
+    - **Dropped audio samples** (as seen from sources like `pulsesrc`)
+    - **Dropped video buffers** (especially in sinks like `glimagesink`)
+    - **QoS events** that may fail to recover the stall if rendering is consistently slow
+
+> This is **not an issue** during offline rendering, where timing pressure from real-time sinks is absent.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
 
 <!-- CONTRIBUTING -->
 

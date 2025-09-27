@@ -23,12 +23,13 @@ add_library(gstprojectm SHARED
     src/enums.h
     src/plugin.h
     src/plugin.c
-    src/projectm.h
-    src/projectm.c
     src/gstglbaseaudiovisualizer.h
     src/gstglbaseaudiovisualizer.c
     src/gstpmaudiovisualizer.h
     src/gstpmaudiovisualizer.c
+    src/pluginbase.h
+    src/pluginbase.c
+    src/register.c
 )
 
 target_include_directories(gstprojectm
@@ -75,3 +76,5 @@ target_link_libraries(gstprojectm
         ${GLIB2_LIBRARIES}
         ${GLIB2_GOBJECT_LIBRARIES}
 )
+
+add_subdirectory(example)
