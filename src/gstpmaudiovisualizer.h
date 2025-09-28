@@ -97,19 +97,11 @@ struct _GstPMAudioVisualizerClass {
   gboolean (*setup)(GstPMAudioVisualizer *scope);
 
   /* virtual function for rendering a frame */
-  gboolean (*render)(GstPMAudioVisualizer *scope, GstBuffer *audio,
-                     GstVideoFrame *video, GstClockTime pts);
+  GstFlowReturn (*render)(GstPMAudioVisualizer *scope, GstBuffer *audio,
+                          GstBuffer **video, GstClockTime pts);
 
   /* virtual function for buffer pool allocation  */
   gboolean (*decide_allocation)(GstPMAudioVisualizer *scope, GstQuery *query);
-
-  /* virtual function for output buffer allocation */
-  GstFlowReturn (*prepare_output_buffer)(GstPMAudioVisualizer *scope,
-                                         GstBuffer **outbuf);
-
-  /* virtual function for mapping the output buffer to video frame */
-  void (*map_output_buffer)(GstPMAudioVisualizer *scope,
-                            GstVideoFrame *outframe, GstBuffer *outbuf);
 
   /* virtual function to allow overridden change_state, cascading to GstElement
    */
@@ -119,8 +111,9 @@ struct _GstPMAudioVisualizerClass {
 
 GType gst_pm_audio_visualizer_get_type(void);
 
-GstFlowReturn gst_pm_audio_visualizer_default_prepare_output_buffer(
-    GstPMAudioVisualizer *scope, GstBuffer **outbuf);
+GstFlowReturn
+gst_pm_audio_visualizer_util_prepare_output_buffer(GstPMAudioVisualizer *scope,
+                                                   GstBuffer **outbuf);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(GstPMAudioVisualizer, gst_object_unref)
 

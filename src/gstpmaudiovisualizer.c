@@ -137,9 +137,6 @@ static gboolean
 gst_pm_audio_visualizer_default_decide_allocation(GstPMAudioVisualizer *scope,
                                                   GstQuery *query);
 
-static void gst_pm_audio_visualizer_default_map_output_buffer(
-    GstPMAudioVisualizer *scope, GstVideoFrame *outframe, GstBuffer *outbuf);
-
 struct _GstPMAudioVisualizerPrivate {
   gboolean negotiated;
 
@@ -254,12 +251,6 @@ gst_pm_audio_visualizer_class_init(GstPMAudioVisualizerClass *klass) {
 
   klass->decide_allocation =
       GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_default_decide_allocation);
-
-  klass->prepare_output_buffer =
-      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_default_prepare_output_buffer);
-
-  klass->map_output_buffer =
-      GST_DEBUG_FUNCPTR(gst_pm_audio_visualizer_default_map_output_buffer);
 }
 
 static void gst_pm_audio_visualizer_init(GstPMAudioVisualizer *scope,
@@ -667,16 +658,9 @@ gst_pm_audio_visualizer_default_decide_allocation(GstPMAudioVisualizer *scope,
           "implemented");
 }
 
-static void gst_pm_audio_visualizer_default_map_output_buffer(
-    GstPMAudioVisualizer *scope, GstVideoFrame *outframe, GstBuffer *outbuf) {
-  /* removed main memory buffer implementation. This vmethod is overridden for
-   * using gl memory by gstglbaseaudiovisualizer. */
-  g_error("vmethod gst_pm_audio_visualizer_default_map_output_buffer is not "
-          "implemented");
-}
-
-GstFlowReturn gst_pm_audio_visualizer_default_prepare_output_buffer(
-    GstPMAudioVisualizer *scope, GstBuffer **outbuf) {
+GstFlowReturn
+gst_pm_audio_visualizer_util_prepare_output_buffer(GstPMAudioVisualizer *scope,
+                                                   GstBuffer **outbuf) {
   GstPMAudioVisualizerPrivate *priv;
 
   priv = scope->priv;
@@ -796,7 +780,9 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
   sbpf = scope->req_spf * bpf;
 
   inbuf = scope->priv->inbuf;
-  /* FIXME: the timestamp in the adapter would be different */
+  /* original code FIXME: the timestamp in the adapter would be different - this
+   * should be fixed now by deriving timestamps from the number of samples
+   * consumed. */
   gst_buffer_copy_into(inbuf, buffer, GST_BUFFER_COPY_METADATA, 0, -1);
 
   /* this is what we have */
@@ -804,7 +790,8 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
   // GST_LOG_OBJECT(scope, "avail: %u, bpf: %u", avail, sbpf);
   while (avail >= sbpf) {
     GstBuffer *outbuf;
-    GstVideoFrame outframe;
+
+    GstClockTime start = gst_util_get_timestamp();
 
     /* calculate timestamp based on audio input samples already processed to
      * avoid clock drift */
@@ -861,11 +848,6 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
 
     ++scope->priv->processed;
 
-    /* get buffer ready for rendering */
-    g_mutex_unlock(&scope->priv->config_lock);
-    ret = klass->prepare_output_buffer(scope, &outbuf);
-    g_mutex_lock(&scope->priv->config_lock);
-
     /* recheck as the value could have changed */
     sbpf = scope->req_spf * bpf;
 
@@ -881,30 +863,25 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     if (!(databuf = gst_adapter_get_buffer(scope->priv->adapter, sbpf)))
       break;
 
-    /* allow customized memory to video frame mapping */
-    g_mutex_unlock(&scope->priv->config_lock);
-    klass->map_output_buffer(scope, &outframe, outbuf);
-    g_mutex_lock(&scope->priv->config_lock);
-
     /* place sbpf number of bytes of audio data into inbuf  */
     gst_buffer_remove_all_memory(inbuf);
     gst_buffer_copy_into(inbuf, databuf, GST_BUFFER_COPY_MEMORY, 0, sbpf);
     gst_buffer_unref(databuf);
 
     /* call class->render() vmethod */
+    g_mutex_unlock(&scope->priv->config_lock);
+
+    GstClockTime before_render = gst_util_get_timestamp();
+
     if (klass->render) {
-      g_mutex_unlock(&scope->priv->config_lock);
-      if (!klass->render(scope, inbuf, &outframe, ts)) {
-        g_mutex_lock(&scope->priv->config_lock);
-        ret = GST_FLOW_ERROR;
-        gst_video_frame_unmap(&outframe);
+      ret = klass->render(scope, inbuf, &outbuf, ts);
+      if (ret != GST_FLOW_OK) {
         goto beach;
       }
-      g_mutex_lock(&scope->priv->config_lock);
     }
-    gst_video_frame_unmap(&outframe);
 
-    g_mutex_unlock(&scope->priv->config_lock);
+    GstClockTime after_render = gst_util_get_timestamp();
+
     if (gst_buffer_get_size(outbuf) == 0) {
       GST_WARNING_OBJECT(scope, "Empty or invalid buffer, dropping.");
       return GST_FLOW_OK;
@@ -916,6 +893,17 @@ static GstFlowReturn gst_pm_audio_visualizer_chain(GstPad *pad,
     GST_BUFFER_PTS(outbuf) = ts;
     GST_BUFFER_DTS(outbuf) = ts;
     GST_BUFFER_DURATION(outbuf) = scope->frame_duration;
+
+    GstClockTime end = gst_util_get_timestamp();
+    GstClockTime duration = end - start;
+
+    if (duration > scope->frame_duration) {
+      GST_WARNING("Generating frame from audio took too long: %" GST_TIME_FORMAT
+                  ", before_render: %" GST_TIME_FORMAT
+                  ", render: %" GST_TIME_FORMAT,
+                  GST_TIME_ARGS(duration), GST_TIME_ARGS(before_render - start),
+                  GST_TIME_ARGS(after_render - before_render));
+    }
 
     ret = gst_pad_push(scope->priv->srcpad, outbuf);
     if (ret != GST_FLOW_OK) {

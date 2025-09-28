@@ -115,9 +115,6 @@ struct _GstGLBaseAudioVisualizerClass {
   /* called to render each frame, in_audio is optional */
   gboolean (*fill_gl_memory)(GstGLBaseAudioVisualizer *glav,
                              GstBuffer *in_audio, GstGLMemory *mem);
-  /* allocate buffer for frame rendering */
-  GstFlowReturn (*prepare_output_buffer)(GstGLBaseAudioVisualizer *glav,
-                                         GstBuffer **outbuf);
 
   /*< private >*/
   gpointer _padding[GST_PADDING];
